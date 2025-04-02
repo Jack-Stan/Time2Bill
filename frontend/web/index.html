@@ -31,8 +31,41 @@
 
   <title>frontend</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Update Firebase scripts to latest version -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    window.addEventListener('load', function(ev) {
+      // Initialize Firebase first
+      const firebaseConfig = {
+        apiKey: "AIzaSyDugy_Vn6Wo8qZm0Wdws2UhsqiTNbCxkVI",
+        authDomain: "time2bill-19f64.firebaseapp.com",
+        projectId: "time2bill-19f64",
+        storageBucket: "time2bill-19f64.appspot.com",
+        messagingSenderId: "1061778069367",
+        appId: "1:1061778069367:web:66626ec8fa4c0151b4b2c2"
+      };
+      
+      firebase.initializeApp(firebaseConfig);
+
+      // Download main.dart.js
+      _flutter.loader.loadEntrypoint({
+        serviceWorker: {
+          serviceWorkerVersion: serviceWorkerVersion,
+        },
+        onEntrypointLoaded: function(engineInitializer) {
+          engineInitializer.initializeEngine().then(function(appRunner) {
+            appRunner.runApp();
+          });
+        }
+      });
+    });
+  </script>
 </head>
 <body>
-  <script src="flutter_bootstrap.js" async></script>
+  <script src="main.dart.js" defer></script>
 </body>
 </html>
