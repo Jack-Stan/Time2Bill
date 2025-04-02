@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'sections/navbar.dart';
 import 'landing_page_model.dart';
 
