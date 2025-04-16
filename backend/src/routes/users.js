@@ -73,7 +73,8 @@ router.put('/:userId/business-details', async (req, res) => {
     // Only include peppolId if it's provided
     const businessDetails = {
       ...details,
-      peppolId: details.peppolId || null // Make sure it's null if not provided
+      peppolId: details.peppolId || null, // Make sure it's null if not provided
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
     };
 
     await admin.firestore().collection('users').doc(userId).update({

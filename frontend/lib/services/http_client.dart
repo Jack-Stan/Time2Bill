@@ -2,68 +2,90 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class HttpClient {
-  static const String baseUrl = 'http://localhost:3000/api';
-
-  static Future<dynamic> post(String endpoint, Map<String, dynamic> body) async {
-    try {
-      print('Sending request to: $baseUrl$endpoint'); // Debug log
-      print('Request body: $body'); // Debug log
-
-      final response = await http.post(
-        Uri.parse('$baseUrl$endpoint'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: json.encode(body),
-      );
-
-      print('Response status: ${response.statusCode}'); // Debug log
-      print('Response body: ${response.body}'); // Debug log
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return json.decode(response.body);
-      }
-
-      throw Exception('Request failed with status: ${response.statusCode}, body: ${response.body}');
-    } catch (e) {
-      print('HTTP Error: $e'); // Debug log
-      rethrow;
-    }
-  }
-
-  static Future<dynamic> put(String endpoint, Map<String, dynamic> body) async {
-    try {
-      final response = await http.put(
-        Uri.parse('$baseUrl$endpoint'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(body),
-      );
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return json.decode(response.body);
-      }
-
-      throw Exception(json.decode(response.body)['error'] ?? 'Request failed');
-    } catch (e) {
-      throw Exception('Network error: ${e.toString()}');
-    }
-  }
-
+  static const String _baseUrl = 'http://localhost:3000/api';
+  
   static Future<dynamic> get(String endpoint) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl$endpoint'),
+        Uri.parse(_baseUrl + endpoint),
         headers: {'Content-Type': 'application/json'},
       );
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return json.decode(response.body);
-      }
-
-      throw Exception(json.decode(response.body)['error'] ?? 'Request failed');
+      
+      return _processResponse(response);
     } catch (e) {
-      throw Exception('Network error: ${e.toString()}');
+      print('HTTP GET Error: $e');
+      throw Exception('Network error: $e');
+    }
+  }
+  
+  static Future<dynamic> post(String endpoint, Map<String, dynamic> data) async {
+    try {
+      final response = await http.post(
+        Uri.parse(_baseUrl + endpoint),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(data),
+      );
+      
+      return _processResponse(response);
+    } catch (e) {
+      print('HTTP POST Error: $e');
+      throw Exception('Network error: $e');
+    }
+  }
+  
+  static Future<dynamic> put(String endpoint, Map<String, dynamic> data) async {
+    try {
+      final response = await http.put(
+        Uri.parse(_baseUrl + endpoint),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(data),
+      );
+      
+      return _processResponse(response);
+    } catch (e) {
+      print('HTTP PUT Error: $e');
+      throw Exception('Network error: $e');
+    }
+  }
+  
+  static Future<dynamic> delete(String endpoint) async {
+    try {
+      final response = await http.delete(
+        Uri.parse(_baseUrl + endpoint),
+        headers: {'Content-Type': 'application/json'},
+      );
+      
+      return _processResponse(response);
+    } catch (e) {
+      print('HTTP DELETE Error: $e');
+      throw Exception('Network error: $e');
+    }
+  }
+  
+  static dynamic _processResponse(http.Response response) {
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      // Check if there's content and parse it
+      if (response.body.isEmpty) {
+        return {};
+      }
+      
+      try {
+        return jsonDecode(response.body);
+      } catch (e) {
+        print('JSON Decode Error: $e');
+        return {};
+      }
+    } else {
+      // Handle errors
+      String errorMessage = 'Request failed with status: ${response.statusCode}';
+      try {
+        final body = jsonDecode(response.body);
+        errorMessage = body['error'] ?? errorMessage;
+      } catch (e) {
+        // Ignore if cannot parse error message
+      }
+      
+      throw Exception(errorMessage);
     }
   }
 }

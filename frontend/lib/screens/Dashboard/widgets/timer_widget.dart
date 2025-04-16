@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/timer_state.dart';
-import 'dart:async';
 
 class WorkTimerWidget extends StatefulWidget {
   const WorkTimerWidget({super.key});
@@ -11,105 +12,245 @@ class WorkTimerWidget extends StatefulWidget {
 }
 
 class _WorkTimerWidgetState extends State<WorkTimerWidget> {
-  Timer? _timer;
-  final List<String> _projects = ['Project A', 'Project B', 'Project C'];
+  final _projectController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  List<String> _projects = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 1), _updateTimer);
-  }
-
-  void _updateTimer(Timer timer) {
-    final timerState = Provider.of<TimerState>(context, listen: false);
-    if (timerState.isRunning) {
-      setState(() {});
-    }
+    _loadProjects();
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _projectController.dispose();
+    _descriptionController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadProjects() async {
+    setState(() {
+      _isLoading = true;
+    });
+    
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      
+      // Just load existing projects without auto-generating
+      final projectsRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('projects');
+      
+      final snapshot = await projectsRef.get();
+      final projectNames = snapshot.docs
+          .map((doc) => doc.data()['title'] as String)
+          .toList();
+      
+      setState(() {
+        _projects = projectNames;
+        if (_projects.isNotEmpty) {
+          _projectController.text = _projects.first;
+        }
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading projects: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _saveTimeEntry(int durationInSeconds) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    
+    try {
+      final now = DateTime.now();
+      
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('timeTracking')
+          .add({
+            'projectId': _projectController.text,
+            'description': _descriptionController.text,
+            'duration': durationInSeconds,
+            'date': Timestamp.fromDate(now),
+            'createdAt': Timestamp.fromDate(now),
+            'lastUpdated': Timestamp.fromDate(now),
+          });
+      
+      // Clear description after saving
+      _descriptionController.clear();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Time entry saved successfully')),
+      );
+    } catch (e) {
+      print('Error saving time entry: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error saving time entry: $e')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<TimerState>(
-      builder: (context, timerState, child) {
-        final duration = timerState.elapsed;
-        final hours = duration.inHours;
-        final minutes = (duration.inMinutes % 60).toString().padLeft(2, '0');
-        final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
-
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Work Timer',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  '$hours:$minutes:$seconds',
-                  style: const TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0B5394),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: timerState.selectedProject,
-                  decoration: const InputDecoration(
-                    labelText: 'Select Project',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: _projects.map((project) {
-                    return DropdownMenuItem(
-                      value: project,
-                      child: Text(project),
-                    );
-                  }).toList(),
-                  onChanged: (value) => timerState.selectProject(value!),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: timerState.selectedProject == null
-                        ? null
-                        : () {
-                            if (timerState.isRunning) {
-                              timerState.stopTimer();
-                            } else {
-                              timerState.startTimer();
-                            }
-                          },
-                    icon: Icon(
-                      timerState.isRunning ? Icons.stop : Icons.play_arrow,
-                    ),
-                    label: Text(
-                      timerState.isRunning ? 'Stop Timer' : 'Start Timer',
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0B5394),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                  ),
-                ),
-              ],
+    final timerState = Provider.of<TimerState>(context);
+    
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Work Timer',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-        );
-      },
+            const Divider(),
+            if (_isLoading)
+              const Center(child: CircularProgressIndicator())
+            else if (_projects.isEmpty)
+              Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.timer_off, size: 40, color: Colors.grey),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'No projects available for time tracking',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/projects');
+                      },
+                      icon: const Icon(Icons.add),
+                      label: const Text('Create a Project'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).primaryColor,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Project Dropdown
+                  DropdownButtonFormField<String>(
+                    value: _projects.isEmpty ? null : (_projects.contains(_projectController.text) ? _projectController.text : _projects.first),
+                    decoration: const InputDecoration(
+                      labelText: 'Project',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _projects.map((project) {
+                      return DropdownMenuItem<String>(
+                        value: project,
+                        child: Text(project),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() {
+                          _projectController.text = value;
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Description Field
+                  TextFormField(
+                    controller: _descriptionController,
+                    decoration: const InputDecoration(
+                      labelText: 'Description',
+                      border: OutlineInputBorder(),
+                      hintText: 'What are you working on?',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Timer Display
+                  Center(
+                    child: Column(
+                      children: [
+                        Text(
+                          timerState.formattedTime,
+                          style: const TextStyle(
+                            fontSize: 48,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (!timerState.isRunning)
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  timerState.startTimer();
+                                },
+                                icon: const Icon(Icons.play_arrow),
+                                label: const Text('Start'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  foregroundColor: Colors.white,
+                                ),
+                              )
+                            else
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  timerState.pauseTimer();
+                                },
+                                icon: const Icon(Icons.pause),
+                                label: const Text('Pause'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange,
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
+                            const SizedBox(width: 16),
+                            ElevatedButton.icon(
+                              onPressed: timerState.seconds > 0
+                                ? () {
+                                    final durationInSeconds = timerState.seconds;
+                                    timerState.resetTimer();
+                                    _saveTimeEntry(durationInSeconds);
+                                  }
+                                : null,
+                              icon: const Icon(Icons.check),
+                              label: const Text('Save'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

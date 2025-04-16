@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/firebase_service.dart';
 
 class LoginPageWidget extends StatefulWidget {
   const LoginPageWidget({super.key});
@@ -14,8 +14,116 @@ class _LoginPageWidgetState extends State<LoginPageWidget> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final Color primaryColor = const Color(0xFF0B5394);
-  final FirebaseAuth _auth = FirebaseAuth.instance;
   bool _isLoading = false;
+  String? _errorMessage;
+  bool _obscureText = true;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleLogin() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+
+      try {
+        // Voor debugging
+        print('Attempting login with email: ${_emailController.text}');
+        
+        await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: _emailController.text,
+          password: _passwordController.text,
+        );
+
+        if (!mounted) return;
+
+        // Check email verification
+        final user = FirebaseAuth.instance.currentUser;
+        await user?.reload();
+        
+        if (user != null && !user.emailVerified) {
+          // User is niet geverifieerd, maar nog steeds ingelogd
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please verify your email address first')),
+          );
+          
+          // Log uit en ga naar register met emailVerification stap
+          await FirebaseAuth.instance.signOut();
+          if (!mounted) return;
+          
+          Navigator.pushReplacementNamed(
+            context, 
+            '/register',
+            arguments: {'resumeStep': 'emailVerification'},
+          );
+          return;
+        }
+        
+        // Controleer of profiel compleet is
+        final firebaseService = FirebaseService();
+        final isProfileComplete = await firebaseService.isProfileComplete(user!.uid);
+        
+        if (!isProfileComplete) {
+          // Profiel is niet compleet
+          if (!mounted) return;
+          Navigator.pushReplacementNamed(
+            context, 
+            '/register',
+            arguments: {'resumeStep': 'businessDetails'},
+          );
+        } else {
+          // Alles is in orde, ga naar dashboard
+          if (!mounted) return;
+          Navigator.pushReplacementNamed(context, '/dashboard');
+        }
+      } on FirebaseAuthException catch (e) {
+        String errorMessage;
+        
+        // Voor debugging
+        print('Firebase authentication error: ${e.code}');
+        
+        switch (e.code) {
+          case 'user-not-found':
+            errorMessage = 'No user found with this email. Please register first.';
+            break;
+          case 'wrong-password':
+            errorMessage = 'Incorrect password. Please try again.';
+            break;
+          case 'invalid-email':
+            errorMessage = 'Invalid email address.';
+            break;
+          case 'user-disabled':
+            errorMessage = 'This account has been disabled. Please contact support.';
+            break;
+          default:
+            errorMessage = 'Login failed. Please try again.';
+        }
+        
+        setState(() {
+          _errorMessage = errorMessage;
+        });
+      } catch (e) {
+        // Voor debugging
+        print('General error during login: $e');
+        
+        setState(() {
+          _errorMessage = 'An error occurred. Please try again later.';
+        });
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,11 +161,21 @@ class _LoginPageWidgetState extends State<LoginPageWidget> {
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _passwordController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Password',
-                        border: OutlineInputBorder(),
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscureText ? Icons.visibility : Icons.visibility_off,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _obscureText = !_obscureText;
+                            });
+                          },
+                        ),
                       ),
-                      obscureText: true,
+                      obscureText: _obscureText,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return 'Please enter your password';
@@ -66,6 +184,14 @@ class _LoginPageWidgetState extends State<LoginPageWidget> {
                       },
                     ),
                     const SizedBox(height: 24),
+                    if (_errorMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
@@ -100,124 +226,5 @@ class _LoginPageWidgetState extends State<LoginPageWidget> {
         ),
       ),
     );
-  }
-
-  Future<void> _handleLogin() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-      try {
-        final userCredential = await _auth.signInWithEmailAndPassword(
-          email: _emailController.text,
-          password: _passwordController.text,
-        );
-
-        if (!userCredential.user!.emailVerified) {
-          if (!mounted) return;
-          // Show verification dialog
-          await showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => AlertDialog(
-              title: const Text('Email Verification Required'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Please verify your email before continuing.'),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () async {
-                      await userCredential.user?.sendEmailVerification();
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Verification email sent!')),
-                      );
-                    },
-                    child: const Text('Resend Verification Email'),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () async {
-                    // Refresh user and check verification status
-                    await userCredential.user?.reload();
-                    final updatedUser = FirebaseAuth.instance.currentUser;
-                    if (updatedUser?.emailVerified ?? false) {
-                      if (!context.mounted) return;
-                      Navigator.of(context).pop();
-                      _checkProfileCompletionAndRedirect(updatedUser!);
-                    } else {
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Email not yet verified')),
-                      );
-                    }
-                  },
-                  child: const Text('I have verified my email'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-              ],
-            ),
-          );
-          return;
-        }
-
-        // Continue with profile check if email is verified
-        await _checkProfileCompletionAndRedirect(userCredential.user!);
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_getReadableError(e.toString()))),
-        );
-      } finally {
-        if (mounted) {
-          setState(() => _isLoading = false);
-        }
-      }
-    }
-  }
-
-  Future<void> _checkProfileCompletionAndRedirect(User user) async {
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get();
-
-    if (!mounted) return;
-
-    if (userDoc.exists) {
-      final userData = userDoc.data() as Map<String, dynamic>;
-      if (userData['profile_completed'] == false) {
-        Navigator.pushReplacementNamed(
-          context, 
-          '/register',
-          arguments: {'resumeStep': 'businessDetails'}
-        );
-      } else {
-        Navigator.pushReplacementNamed(context, '/dashboard');
-      }
-    }
-  }
-
-  String _getReadableError(String error) {
-    if (error.contains('user-not-found')) {
-      return 'No account found with this email';
-    }
-    if (error.contains('wrong-password')) {
-      return 'Incorrect password';
-    }
-    if (error.contains('too-many-requests')) {
-      return 'Too many attempts. Please try again later';
-    }
-    return 'Login failed. Please try again';
-  }
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
   }
 }

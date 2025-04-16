@@ -123,7 +123,7 @@ class _RegisterPageWidgetState extends State<RegisterPageWidget> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 8), // Correctie hier: EdgeInsets in plaats van SizedBox
       decoration: BoxDecoration(
         color: Colors.red.shade50,
         border: Border.all(color: Colors.red.shade200),
@@ -380,6 +380,9 @@ class _RegisterPageWidgetState extends State<RegisterPageWidget> {
           const SnackBar(content: Text('Creating account...')),
         );
 
+        // Voor debugging, print de gegevens
+        print('Registering with email: ${_emailController.text}, name: ${_nameController.text}');
+
         await _firebaseService.registerUser(
           email: _emailController.text,
           password: _passwordController.text,
@@ -389,7 +392,7 @@ class _RegisterPageWidgetState extends State<RegisterPageWidget> {
         if (!mounted) return;
 
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Account created successfully!')),
+          const SnackBar(content: Text('Account created successfully! Please verify your email.')),
         );
 
         setState(() => _currentStep = RegistrationStep.emailVerification);
@@ -422,19 +425,38 @@ class _RegisterPageWidgetState extends State<RegisterPageWidget> {
   void _checkEmailVerification() async {
     setState(() => _isLoading = true);
     try {
-      await FirebaseAuth.instance.currentUser?.reload();
-      if (!mounted) return;
-
-      if (FirebaseAuth.instance.currentUser?.emailVerified ?? false) {
-        setState(() {
-          _currentStep = RegistrationStep.businessDetails;
-        });
+      final user = FirebaseAuth.instance.currentUser;
+      
+      // Print voor debugging
+      print('Current user: ${user?.email}, verified: ${user?.emailVerified}');
+      
+      if (user != null) {
+        // Force reload the user to get updated verification status
+        await user.reload();
+        
+        if (user.emailVerified) {
+          setState(() {
+            _emailVerified = true;
+            _currentStep = RegistrationStep.businessDetails;
+          });
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Email verified successfully!')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Email not yet verified. Please check your inbox and verify your email.')),
+          );
+        }
       } else {
-        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please verify your email first')),
+          const SnackBar(content: Text('Please log in first to verify your email.')),
         );
       }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error checking verification: ${e.toString()}')),
+      );
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

@@ -12,46 +12,86 @@ class DashboardSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Color primaryColor = const Color(0xFF0B5394);
+
     return Container(
       width: 250,
       color: Colors.white,
       child: Column(
         children: [
-          // Logo
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Image.asset(
-              'lib/utils/images/LogoMetTitel.jpg',
-              height: 50,
+          // Logo and header
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            child: Row(
+              children: [
+                Image.asset(
+                  'lib/utils/images/LogoZonderTitel.png',
+                  width: 40,
+                  height: 40,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Time2Bill',
+                  style: TextStyle(
+                    color: primaryColor,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
           ),
           const Divider(),
-          // Menu Items
-          _buildMenuItem(0, 'Dashboard', Icons.dashboard),
-          _buildMenuItem(1, 'Time Tracking', Icons.timer),
-          _buildMenuItem(2, 'Invoices', Icons.description),
-          _buildMenuItem(3, 'Clients', Icons.people),
-          _buildMenuItem(4, 'Reports', Icons.bar_chart),
-          const Spacer(),
+          
+          // Hoofdnavigatie items
+          Expanded(
+            child: Column(
+              children: [
+                // Navigatie menu items bovenaan
+                _buildNavItem(context, 'Dashboard', Icons.dashboard, 0, primaryColor),
+                _buildNavItem(context, 'Projects', Icons.folder, 6, primaryColor),
+                _buildNavItem(context, 'Time Tracking', Icons.timer, 1, primaryColor),
+                _buildNavItem(context, 'Invoices', Icons.receipt, 2, primaryColor),
+                _buildNavItem(context, 'Clients', Icons.people, 3, primaryColor),
+                _buildNavItem(context, 'Reports', Icons.bar_chart, 4, primaryColor),
+                
+                // Lege ruimte in het midden
+                const Spacer(),
+              ],
+            ),
+          ),
+          
+          // Settings item onderaan (verwijder de Profile knop)
           const Divider(),
-          _buildMenuItem(5, 'Settings', Icons.settings),
+          _buildNavItem(context, 'Settings', Icons.settings, 5, primaryColor),
+          const SizedBox(height: 16),
         ],
       ),
     );
   }
 
-  Widget _buildMenuItem(int index, String title, IconData icon) {
+  Widget _buildNavItem(
+    BuildContext context, 
+    String title, 
+    IconData icon, 
+    int index, 
+    Color primaryColor,
+  ) {
     final isSelected = selectedIndex == index;
+    
     return ListTile(
-      leading: Icon(icon, 
-        color: isSelected ? const Color(0xFF0B5394) : Colors.grey,
+      leading: Icon(
+        icon,
+        color: isSelected ? primaryColor : Colors.grey,
       ),
-      title: Text(title,
+      title: Text(
+        title,
         style: TextStyle(
-          color: isSelected ? const Color(0xFF0B5394) : Colors.grey[800],
+          color: isSelected ? primaryColor : Colors.black,
           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
         ),
       ),
+      selectedTileColor: Colors.blue.withOpacity(0.1),
       selected: isSelected,
       onTap: () => onItemSelected(index),
     );

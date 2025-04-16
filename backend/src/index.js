@@ -5,6 +5,9 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import userRoutes from './routes/users.js';
+import projectRoutes from './routes/projects.js';
+import clientRoutes from './routes/clients.js';
+import invoiceRoutes from './routes/invoices.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -54,6 +57,9 @@ app.get('/api/health', (req, res) => {
 
 // Add routes
 app.use('/api/users', userRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/clients', clientRoutes);
+app.use('/api/invoices', invoiceRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
