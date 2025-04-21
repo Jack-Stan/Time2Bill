@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import '../../../services/firebase_service.dart';
 
 class DashboardOverview extends StatefulWidget {
   const DashboardOverview({super.key});
@@ -14,6 +15,7 @@ class _DashboardOverviewState extends State<DashboardOverview> {
   bool _isLoading = true;
   String? _errorMessage;
   List<Map<String, dynamic>> _activities = [];
+  final FirebaseService _firebaseService = FirebaseService();
 
   @override
   void initState() {
@@ -37,109 +39,146 @@ class _DashboardOverviewState extends State<DashboardOverview> {
 
       List<Map<String, dynamic>> activities = [];
 
+      // Een betere aanpak: gebruik de FirebaseService
       try {
-        // Fetch invoices with proper error handling
-        print('\n1. Attempting to fetch invoices...');
-        final invoicesRef = FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('invoices');
+        // Fetch invoices using the service
+        print('\n1. Fetching most recent invoices via Firebase Service...');
+        final invoices = await _firebaseService.getInvoices();
         
-        final invoicesSnapshot = await invoicesRef
-            .orderBy('createdAt', descending: true)
-            .limit(5)
-            .get();
-
-        final invoiceActivities = invoicesSnapshot.docs.map((doc) {
-          final data = doc.data();
-          final timestamp = data['createdAt'] as Timestamp?;
-          final dateStr = timestamp != null
-              ? DateFormat('dd/MM/yyyy').format(timestamp.toDate())
+        // Neem alleen de eerste 5 facturen
+        final recentInvoices = invoices.take(5).map((invoice) {
+          final dateStr = invoice.invoiceDate != null
+              ? DateFormat('dd/MM/yyyy').format(invoice.invoiceDate)
               : 'Unknown date';
 
           return {
-            'id': doc.id,
+            'id': invoice.id,
             'type': 'invoice',
-            'title': data['invoiceNumber'] ?? 'Invoice',
+            'title': invoice.invoiceNumber,
             'subtitle': 'Created on $dateStr',
-            'amount': data['total'] != null ? '€${data['total']}' : '',
+            'amount': '€${invoice.total.toStringAsFixed(2)}',
             'icon': Icons.description,
-            'createdAt': timestamp,
+            'createdAt': Timestamp.fromDate(invoice.invoiceDate),
           };
         }).toList();
 
-        activities.addAll(invoiceActivities);
-        print('✅ Successfully fetched ${invoiceActivities.length} invoices');
+        activities.addAll(recentInvoices);
+        print('✅ Successfully fetched ${recentInvoices.length} invoices via service');
       } catch (e) {
-        print('❌ Error fetching invoices: $e');
-        if (e is FirebaseException) {
-          print('  Firebase error code: ${e.code}');
-          print('  Firebase error message: ${e.message}');
+        print('❌ Error fetching invoices via service: $e');
+        
+        // Fallback naar de directe Firestore aanpak indien de service faalt
+        try {
+          print('\n1b. Falling back to direct Firestore query for invoices...');
+          final invoicesRef = FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('invoices');
           
-          if (e.code == 'failed-precondition' || e.message?.contains('index') == true) {
-            print('\n===== INDEX ERROR DETECTED =====');
-            print('This error typically occurs when Firestore needs an index for your query.');
-            print('FULL ERROR MESSAGE:');
-            print(e.toString());
-            print('\nLOOK FOR A URL IN THE ABOVE ERROR MESSAGE AND VISIT IT TO CREATE THE INDEX');
-            print('===== END INDEX ERROR =====\n');
-          }
+          final invoicesSnapshot = await invoicesRef
+              .orderBy('createdAt', descending: true)
+              .limit(5)
+              .get();
+
+          final invoiceActivities = invoicesSnapshot.docs.map((doc) {
+            final data = doc.data();
+            final timestamp = data['createdAt'] as Timestamp?;
+            final dateStr = timestamp != null
+                ? DateFormat('dd/MM/yyyy').format(timestamp.toDate())
+                : 'Unknown date';
+
+            return {
+              'id': doc.id,
+              'type': 'invoice',
+              'title': data['invoiceNumber'] ?? 'Invoice',
+              'subtitle': 'Created on $dateStr',
+              'amount': data['total'] != null ? '€${data['total']}' : '',
+              'icon': Icons.description,
+              'createdAt': timestamp,
+            };
+          }).toList();
+
+          activities.addAll(invoiceActivities);
+          print('✅ Successfully fetched ${invoiceActivities.length} invoices via direct query');
+        } catch (e2) {
+          print('❌ Error in fallback invoice query: $e2');
         }
       }
 
       try {
-        // Fetch time entries
-        print('\n2. Attempting to fetch time entries...');
-        final timeTrackingRef = FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('timeTracking');
+        // Fetch time entries using the service
+        print('\n2. Fetching time entries via Firebase Service...');
+        final timeEntries = await _firebaseService.getTimeEntries();
         
-        final timeEntriesSnapshot = await timeTrackingRef
-            .orderBy('createdAt', descending: true)
-            .limit(5)
-            .get();
-
-        final timeEntries = timeEntriesSnapshot.docs.map((doc) {
-          final data = doc.data();
-          final timestamp = data['createdAt'] as Timestamp?;
-          final dateStr = timestamp != null
-              ? DateFormat('dd/MM/yyyy').format(timestamp.toDate())
+        // Neem alleen de eerste 5 tijdregistraties
+        final recentTimeEntries = timeEntries.take(5).map((entry) {
+          final dateStr = entry.startTime != null
+              ? DateFormat('dd/MM/yyyy').format(entry.startTime)
               : 'Unknown date';
 
           // Convert duration (seconds) to hours and minutes
-          final durationSeconds = (data['duration'] as num?)?.toInt() ?? 0;
+          final durationSeconds = entry.duration.toInt();
           final hours = durationSeconds ~/ 3600;
           final minutes = (durationSeconds % 3600) ~/ 60;
           final durationStr = '${hours}h ${minutes}m';
 
           return {
-            'id': doc.id,
+            'id': entry.id,
             'type': 'time',
-            'title': data['description'] ?? 'Time Entry',
+            'title': entry.description,
             'subtitle': dateStr,
             'amount': durationStr,
             'icon': Icons.timer,
-            'createdAt': timestamp,
+            'createdAt': Timestamp.fromDate(entry.startTime),
           };
         }).toList();
 
-        activities.addAll(timeEntries);
-        print('✅ Successfully fetched ${timeEntries.length} time entries');
+        activities.addAll(recentTimeEntries);
+        print('✅ Successfully fetched ${recentTimeEntries.length} time entries via service');
       } catch (e) {
-        print('❌ Error fetching time entries: $e');
-        if (e is FirebaseException) {
-          print('  Firebase error code: ${e.code}');
-          print('  Firebase error message: ${e.message}');
+        print('❌ Error fetching time entries via service: $e');
+        
+        // Fallback direct query
+        try {
+          print('\n2b. Falling back to direct Firestore query for time entries...');
+          final timeEntriesRef = FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('timeTracking');
           
-          if (e.code == 'failed-precondition' || e.message?.contains('index') == true) {
-            print('\n===== INDEX ERROR DETECTED =====');
-            print('This error typically occurs when Firestore needs an index for your query.');
-            print('FULL ERROR MESSAGE:');
-            print(e.toString());
-            print('\nLOOK FOR A URL IN THE ABOVE ERROR MESSAGE AND VISIT IT TO CREATE THE INDEX');
-            print('===== END INDEX ERROR =====\n');
-          }
+          final timeEntriesSnapshot = await timeEntriesRef
+              .orderBy('createdAt', descending: true)
+              .limit(5)
+              .get();
+
+          final timeEntryActivities = timeEntriesSnapshot.docs.map((doc) {
+            final data = doc.data();
+            final timestamp = data['startTime'] as Timestamp?;
+            final dateStr = timestamp != null
+                ? DateFormat('dd/MM/yyyy').format(timestamp.toDate())
+                : 'Unknown date';
+
+            // Convert duration (seconds) to hours and minutes
+            final durationSeconds = (data['duration'] as num?)?.toInt() ?? 0;
+            final hours = durationSeconds ~/ 3600;
+            final minutes = (durationSeconds % 3600) ~/ 60;
+            final durationStr = '${hours}h ${minutes}m';
+
+            return {
+              'id': doc.id,
+              'type': 'time',
+              'title': data['description'] ?? 'Time Entry',
+              'subtitle': dateStr,
+              'amount': durationStr,
+              'icon': Icons.timer,
+              'createdAt': timestamp,
+            };
+          }).toList();
+
+          activities.addAll(timeEntryActivities);
+          print('✅ Successfully fetched ${timeEntryActivities.length} time entries via direct query');
+        } catch (e2) {
+          print('❌ Error in fallback time entries query: $e2');
         }
       }
 
@@ -172,30 +211,6 @@ class _DashboardOverviewState extends State<DashboardOverview> {
       print('\n===== DASHBOARD ACTIVITY ERROR =====');
       print('Error type: ${error.runtimeType}');
       print('Error message: $error');
-      
-      final errorMsg = error.toString();
-      final urlStartIndex = errorMsg.indexOf('https://console.firebase.google.com');
-      if (urlStartIndex != -1) {
-        print('\n========== INDEX CREATION URL ==========');
-        final url = errorMsg.substring(urlStartIndex);
-        print('Copy this URL to create the required index:');
-        print(url);
-        print('========================================\n');
-      }
-      
-      if (error is FirebaseException) {
-        print('\nFirebase Error Details:');
-        print('  Code: ${error.code}');
-        print('  Message: ${error.message}');
-        print('  Stack: ${error.stackTrace}');
-        
-        if (error.code == 'failed-precondition' && error.message?.contains('index') == true) {
-          print('\n⚠️ INDEX ERROR: This query requires an index to be created.');
-          print('LOOK FOR THE URL ABOVE TO CREATE THE MISSING INDEX.');
-          print('Alternatively, you can update your firestore.indexes.json file and deploy it.');
-        }
-      }
-      
       print('===== END ERROR =====\n');
     }
   }

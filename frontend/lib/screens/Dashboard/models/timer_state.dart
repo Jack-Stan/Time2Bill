@@ -1,50 +1,83 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-import 'dart:async';
 
 class TimerState extends ChangeNotifier {
-  int _seconds = 0;
-  Timer? _timer;
   bool _isRunning = false;
-
-  int get seconds => _seconds;
-  bool get isRunning => _isRunning;
+  int _secondsElapsed = 0;
+  String _description = '';
+  String? _projectId;
+  String? _projectName;
+  String? _clientId;
+  String? _clientName;
+  bool _isBillable = true;
+  DateTime? _startTime;
   
-  // Formatted time display (HH:MM:SS)
-  String get formattedTime {
-    final hours = (_seconds ~/ 3600).toString().padLeft(2, '0');
-    final minutes = ((_seconds % 3600) ~/ 60).toString().padLeft(2, '0');
-    final secs = (_seconds % 60).toString().padLeft(2, '0');
-    return '$hours:$minutes:$secs';
-  }
-
-  void startTimer() {
-    if (_isRunning) return; // Don't start if already running
-    
+  bool get isRunning => _isRunning;
+  int get secondsElapsed => _secondsElapsed;
+  String get description => _description;
+  String? get projectId => _projectId;
+  String? get projectName => _projectName;
+  String? get clientId => _clientId;
+  String? get clientName => _clientName;
+  bool get isBillable => _isBillable;
+  DateTime? get startTime => _startTime;
+  
+  DateTime? _lastTick;
+  
+  void startTimer({
+    required String description,
+    String? projectId,
+    String? projectName,
+    String? clientId,
+    String? clientName,
+    bool isBillable = true,
+  }) {
     _isRunning = true;
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      _seconds++;
+    _secondsElapsed = 0;
+    _description = description;
+    _projectId = projectId;
+    _projectName = projectName;
+    _clientId = clientId;
+    _clientName = clientName;
+    _isBillable = isBillable;
+    _startTime = DateTime.now();
+    _lastTick = DateTime.now();
+    notifyListeners();
+    
+    _startTickTimer();
+  }
+  
+  void _startTickTimer() {
+    Future.delayed(const Duration(seconds: 1), () {
+      if (!_isRunning) return;
+      
+      final now = DateTime.now();
+      if (_lastTick != null) {
+        final secondsDiff = now.difference(_lastTick!).inSeconds;
+        // Ensure we add at least 1 second even if system clock adjustments occur
+        _secondsElapsed += secondsDiff > 0 ? secondsDiff : 1;
+      }
+      _lastTick = now;
+      
       notifyListeners();
+      _startTickTimer();
     });
-    notifyListeners();
   }
-
-  void pauseTimer() {
-    _timer?.cancel();
+  
+  void stopTimer() {
     _isRunning = false;
     notifyListeners();
   }
-
+  
   void resetTimer() {
-    _timer?.cancel();
-    _seconds = 0;
     _isRunning = false;
+    _secondsElapsed = 0;
+    _description = '';
+    _projectId = null;
+    _projectName = null;
+    _clientId = null;
+    _clientName = null;
+    _isBillable = true;
+    _startTime = null;
     notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
   }
 }

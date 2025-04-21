@@ -191,7 +191,7 @@ class _WorkTimerWidgetState extends State<WorkTimerWidget> {
                     child: Column(
                       children: [
                         Text(
-                          timerState.formattedTime,
+                          _formatTime(timerState.secondsElapsed),
                           style: const TextStyle(
                             fontSize: 48,
                             fontWeight: FontWeight.bold,
@@ -204,7 +204,10 @@ class _WorkTimerWidgetState extends State<WorkTimerWidget> {
                             if (!timerState.isRunning)
                               ElevatedButton.icon(
                                 onPressed: () {
-                                  timerState.startTimer();
+                                  timerState.startTimer(
+                                    description: _descriptionController.text,
+                                    projectId: _projectController.text.isNotEmpty ? _projectController.text : null
+                                  );
                                 },
                                 icon: const Icon(Icons.play_arrow),
                                 label: const Text('Start'),
@@ -216,7 +219,7 @@ class _WorkTimerWidgetState extends State<WorkTimerWidget> {
                             else
                               ElevatedButton.icon(
                                 onPressed: () {
-                                  timerState.pauseTimer();
+                                  timerState.stopTimer(); // Using stopTimer instead of pauseTimer
                                 },
                                 icon: const Icon(Icons.pause),
                                 label: const Text('Pause'),
@@ -227,9 +230,9 @@ class _WorkTimerWidgetState extends State<WorkTimerWidget> {
                               ),
                             const SizedBox(width: 16),
                             ElevatedButton.icon(
-                              onPressed: timerState.seconds > 0
+                              onPressed: timerState.secondsElapsed > 0
                                 ? () {
-                                    final durationInSeconds = timerState.seconds;
+                                    final durationInSeconds = timerState.secondsElapsed;
                                     timerState.resetTimer();
                                     _saveTimeEntry(durationInSeconds);
                                   }
@@ -252,5 +255,14 @@ class _WorkTimerWidgetState extends State<WorkTimerWidget> {
         ),
       ),
     );
+  }
+  
+  // Helper method to format seconds into HH:MM:SS
+  String _formatTime(int seconds) {
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    final remainingSeconds = seconds % 60;
+    
+    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
   }
 }

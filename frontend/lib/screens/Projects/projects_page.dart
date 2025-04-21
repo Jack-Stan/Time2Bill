@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Dashboard/widgets/sidebar.dart';
 import 'widgets/project_card.dart';
 import 'widgets/new_project_form.dart';
+import '../../services/firebase_service.dart';
 
 class ProjectsPage extends StatefulWidget {
   const ProjectsPage({super.key});
@@ -32,31 +33,26 @@ class _ProjectsPageState extends State<ProjectsPage> {
     });
 
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        throw Exception('User not authenticated');
-      }
-
-      final snapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('projects')
-          .orderBy('createdAt', descending: true)
-          .get();
-
-      final projects = snapshot.docs.map((doc) {
-        final data = doc.data();
+      final firebaseService = FirebaseService();
+      final projects = await firebaseService.getProjects();
+      
+      // Convert ProjectModel objects to the map format used by the UI
+      final projectsData = projects.map((project) {
         return {
-          'id': doc.id,
-          'title': data['title'] ?? 'Untitled Project',
-          'client': data['client'] ?? 'Unknown Client',
-          'description': data['description'] ?? 'No description',
-          'status': data['status'] ?? 'Active',
+          'id': project.id ?? '',
+          'title': project.title,
+          'client': project.clientName ?? 'No Client',
+          'description': project.description ?? 'No description',
+          'status': project.status,
+          'hourlyRate': project.hourlyRate,
+          'startDate': project.startDate,
+          'endDate': project.endDate,
+          'clientId': project.clientId ?? '',
         };
       }).toList();
 
       setState(() {
-        _projects = projects;
+        _projects = projectsData;
         _isLoading = false;
       });
     } catch (error) {
@@ -64,6 +60,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
         _errorMessage = 'Error loading projects: ${error.toString()}';
         _isLoading = false;
       });
+      print('Error fetching projects: $error');
     }
   }
 
