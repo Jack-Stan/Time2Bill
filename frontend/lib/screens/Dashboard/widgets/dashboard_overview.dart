@@ -3,15 +3,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../../../services/firebase_service.dart';
+import '../../../services/dashboard_refresh_service.dart';
 
 class DashboardOverview extends StatefulWidget {
   const DashboardOverview({super.key});
 
   @override
-  State<DashboardOverview> createState() => _DashboardOverviewState();
+  DashboardOverviewState createState() => DashboardOverviewState();
 }
 
-class _DashboardOverviewState extends State<DashboardOverview> {
+// Using public state class so it can be accessed with GlobalKey from other files
+class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindingObserver {
   bool _isLoading = true;
   String? _errorMessage;
   List<Map<String, dynamic>> _activities = [];
@@ -20,6 +22,28 @@ class _DashboardOverviewState extends State<DashboardOverview> {
   @override
   void initState() {
     super.initState();
+    _fetchRecentActivity();
+    // Registreer voor app lifecycle events
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    // Verwijder de observer bij het vernietigen van de widget
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Wanneer de app weer wordt geopend of naar de voorgrond komt
+    if (state == AppLifecycleState.resumed) {
+      _fetchRecentActivity();
+    }
+  }
+
+  // Deze methode wordt openbaar gemaakt zodat deze vanuit de parent aangeroepen kan worden
+  void refreshActivity() {
     _fetchRecentActivity();
   }
 

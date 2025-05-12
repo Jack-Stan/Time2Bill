@@ -7,6 +7,7 @@ import 'widgets/invoice_filter_dialog.dart';
 import 'widgets/new_invoice_form.dart';
 import 'widgets/recurring_invoice_form.dart';
 import 'widgets/recurring_invoice_list.dart';
+import '../../services/invoice_export_service.dart';
 
 class InvoicesPage extends StatefulWidget {
   const InvoicesPage({super.key});
@@ -34,6 +35,9 @@ class _InvoicesPageState extends State<InvoicesPage> with SingleTickerProviderSt
   int _recurringCount = 0;
 
   final TextEditingController _searchController = TextEditingController();
+
+  // PDF en Peppol-integratie functies
+  final InvoiceExportService _invoiceExportService = InvoiceExportService();
 
   @override
   void initState() {
@@ -201,6 +205,141 @@ class _InvoicesPageState extends State<InvoicesPage> with SingleTickerProviderSt
         return const RecurringInvoiceForm();
       },
     ).then((_) => _fetchRecurringCount());
+  }
+
+  // Download de factuur als PDF
+  Future<void> _downloadInvoicePdf(String invoiceId) async {
+    try {
+      // Toon laad-indicator
+      setState(() {
+        _isLoading = true;
+      });
+      
+      await _invoiceExportService.generateAndDownloadPdf(invoiceId);
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('PDF factuur is gedownload')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Fout bij downloaden van PDF: $e')),
+      );
+    } finally {
+      // Verberg laad-indicator
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+  
+  // Download de factuur als UBL XML voor Peppol
+  Future<void> _downloadInvoiceUbl(String invoiceId) async {
+    try {
+      // Toon laad-indicator
+      setState(() {
+        _isLoading = true;
+      });
+      
+      await _invoiceExportService.generateAndDownloadUbl(invoiceId);
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('UBL XML-bestand is gedownload')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Fout bij downloaden van UBL XML: $e')),
+      );
+    } finally {
+      // Verberg laad-indicator
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+  
+  // Verstuur de factuur via Peppol
+  Future<void> _sendInvoiceViaPeppol(String invoiceId) async {
+    try {
+      // Toon laad-indicator
+      setState(() {
+        _isLoading = true;
+      });
+      
+      final result = await _invoiceExportService.sendViaPeppol(invoiceId);
+      
+      if (!mounted) return;
+      
+      if (result['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Factuur is succesvol verzonden via Peppol')),
+        );
+        _fetchInvoices(); // Ververs factuurlijst om statuswijziging te tonen
+      } else {
+        // Toon dialoog met uitgebreidere uitleg
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Verzending via Peppol niet mogelijk'),
+            content: Text(result['message'] ?? 'Onbekende fout'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  
+                  // Als het genereren wel werkte maar alleen verzenden niet,
+                  // vraag of gebruiker het XML-bestand wil downloaden
+                  if (result['note'] != null) {
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('XML-bestand downloaden?'),
+                        content: const Text(
+                          'Je kunt het UBL XML-bestand downloaden om handmatig te uploaden naar je Access Point provider.'
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Annuleren'),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              _downloadInvoiceUbl(invoiceId);
+                            },
+                            child: const Text('Downloaden'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Fout bij verzenden via Peppol: $e')),
+      );
+    } finally {
+      // Verberg laad-indicator
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -719,14 +858,33 @@ class _InvoicesPageState extends State<InvoicesPage> with SingleTickerProviderSt
               Text('Edit'),
             ],
           ),
-        ),
-        const PopupMenuItem(
+        ),        const PopupMenuItem(
           value: 'download',
           child: Row(
             children: [
               Icon(Icons.download, size: 18),
               SizedBox(width: 8),
               Text('Download PDF'),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'download_ubl',
+          child: Row(
+            children: [
+              Icon(Icons.code, size: 18),
+              SizedBox(width: 8),
+              Text('Download UBL (Peppol)'),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'send_peppol',
+          child: Row(
+            children: [
+              Icon(Icons.send_to_mobile, size: 18),
+              SizedBox(width: 8),
+              Text('Verzenden via Peppol'),
             ],
           ),
         ),
@@ -748,6 +906,15 @@ class _InvoicesPageState extends State<InvoicesPage> with SingleTickerProviderSt
               SizedBox(width: 8),
               Text('Delete', style: TextStyle(color: Colors.red)),
             ],
+          ),        ),
+        const PopupMenuItem(
+          value: 'send_peppol',
+          child: Row(
+            children: [
+              Icon(Icons.send, size: 18),
+              SizedBox(width: 8),
+              Text('Send via Peppol'),
+            ],
           ),
         ),
       ],
@@ -763,13 +930,19 @@ class _InvoicesPageState extends State<InvoicesPage> with SingleTickerProviderSt
           // TODO: Open edit invoice form
           break;
         case 'download':
-          // TODO: Generate and download PDF
+          _downloadInvoicePdf(invoice['id']);
           break;
         case 'mark_paid':
           _markInvoiceAsPaid(invoice['id']);
           break;
         case 'delete':
           _showDeleteConfirmation(invoice['id']);
+          break;
+        case 'download_ubl':
+          _downloadInvoiceUbl(invoice['id']);
+          break;
+        case 'send_peppol':
+          _sendInvoiceViaPeppol(invoice['id']);
           break;
       }
     });

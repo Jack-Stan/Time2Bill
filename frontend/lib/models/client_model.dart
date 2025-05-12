@@ -7,12 +7,14 @@ class ClientModel {
   final String email;
   final String phone;
   final String address;
-  final String vatNumber;
+  final String city;
+  final String postalCode;
+  final String? vatNumber;
   final String contactPerson;
   final String notes;
+  final String? peppolId;
   final DateTime? createdAt;
   final DateTime? updatedAt;
-
   ClientModel({
     this.id = '',
     required this.name,
@@ -20,13 +22,15 @@ class ClientModel {
     this.email = '',
     this.phone = '',
     this.address = '',
-    this.vatNumber = '',
+    this.city = '',
+    this.postalCode = '',
+    this.vatNumber,
     this.contactPerson = '',
     this.notes = '',
+    this.peppolId,
     this.createdAt,
     this.updatedAt,
   });
-
   factory ClientModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     
@@ -37,18 +41,23 @@ class ClientModel {
       email: data['email'] ?? '',
       phone: data['phone'] ?? '',
       address: data['address'] ?? '',
-      vatNumber: data['vatNumber'] ?? '',
+      city: data['city'] ?? '',
+      postalCode: data['postalCode'] ?? '',
+      vatNumber: data['vatNumber'],
       contactPerson: data['contactPerson'] ?? '',
       notes: data['notes'] ?? '',
+      peppolId: data['peppolId'],
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
     );
   }
-
   Map<String, dynamic> toMap() {
     return {
       'name': name,
       'companyName': companyName,
+      'city': city,
+      'postalCode': postalCode,
+      if (peppolId != null) 'peppolId': peppolId,
       'email': email,
       'phone': phone,
       'address': address,

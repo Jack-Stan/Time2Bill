@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Dashboard/widgets/sidebar.dart';
 
 class ProjectDetailPage extends StatefulWidget {
@@ -14,30 +16,6 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> with SingleTicker
   int _selectedIndex = 6; // Projects index in sidebar
   late TabController _tabController;
   final Color primaryColor = const Color(0xFF0B5394);
-  
-  // Mock tasks data
-  final List<Map<String, dynamic>> _tasks = [
-    {
-      'id': '1',
-      'title': 'Design homepage mockup',
-      'completed': true,
-    },
-    {
-      'id': '2',
-      'title': 'Create responsive layout',
-      'completed': true,
-    },
-    {
-      'id': '3',
-      'title': 'Implement contact form',
-      'completed': false,
-    },
-    {
-      'id': '4',
-      'title': 'SEO optimization',
-      'completed': false,
-    },
-  ];
   
   // Mock time entries
   final List<Map<String, dynamic>> _timeEntries = [
@@ -295,6 +273,14 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> with SingleTicker
 
   // Tab contents
   Widget _buildTasksTab() {
+    // Get project data from route
+    final projectData = widget.projectData ?? 
+      (ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>? ?? {});
+      
+    // Get tasks from project data, or use empty list if not available
+    final List<Map<String, dynamic>> tasks = 
+      (projectData['todoItems'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -303,16 +289,16 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> with SingleTicker
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Taken (${_tasks.length})',
+              'Taken (${tasks.length})',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: Colors.grey[800],
               ),
-            ),
-            ElevatedButton.icon(
+            ),            ElevatedButton.icon(
               onPressed: () {
                 // Add new task
+                _addNewTask(projectData);
               },
               icon: const Icon(Icons.add),
               label: const Text('Nieuwe taak'),
@@ -325,47 +311,248 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> with SingleTicker
         ),
         const SizedBox(height: 16),
         Expanded(
-          child: ListView.builder(
-            itemCount: _tasks.length,
-            itemBuilder: (context, index) {
-              final task = _tasks[index];
-              return Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: CheckboxListTile(
-                  title: Text(
-                    task['title'],
-                    style: TextStyle(
-                      decoration: task['completed'] ? TextDecoration.lineThrough : null,
-                    ),
-                  ),
-                  value: task['completed'],
-                  onChanged: (bool? newValue) {
-                    setState(() {
-                      task['completed'] = newValue;
-                    });
+          child: tasks.isEmpty
+              ? _buildEmptyTasksState()
+              : ListView.builder(
+                  itemCount: tasks.length,
+                  itemBuilder: (context, index) {
+                    final task = tasks[index];
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: CheckboxListTile(
+                        title: Text(
+                          task['title'],
+                          style: TextStyle(
+                            decoration: task['completed'] ? TextDecoration.lineThrough : null,
+                          ),
+                        ),
+                        value: task['completed'],                        onChanged: (bool? newValue) {
+                          setState(() {
+                            task['completed'] = newValue;
+                            // Update in Firebase after changing completion status
+                            _updateProject(projectData);
+                          });
+                        },
+                        secondary: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [                            IconButton(
+                              icon: const Icon(Icons.edit, size: 20),
+                              onPressed: () => _editTask(projectData, task),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete, size: 20),
+                              onPressed: () => _deleteTask(projectData, task['id']),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
                   },
-                  secondary: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit, size: 20),
-                        onPressed: () {},
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, size: 20),
-                        onPressed: () {},
-                      ),
-                    ],
-                  ),
                 ),
-              );
-            },
-          ),
         ),
       ],
+    );
+  }
+  // Update the project in Firebase
+  Future<void> _updateProject(Map<String, dynamic> projectData) async {
+    try {
+      final projectId = projectData['id'] as String;
+      
+      if (projectId.isEmpty) {
+        print('Cannot update project: No project ID');
+        return;
+      }
+      
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print('Cannot update project: User not authenticated');
+        return;
+      }
+      
+      // Update todoItems field in Firestore
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('projects')
+          .doc(projectId)
+          .update({
+            'todoItems': projectData['todoItems'],
+          });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Project bijgewerkt')),
+      );
+    } catch (error) {
+      print('Error updating project: $error');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Fout bij bijwerken project: $error')),
+      );
+    }
+  }
+  
+  // Add a new task to the project
+  void _addNewTask(Map<String, dynamic> projectData) {
+    final TextEditingController taskController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Nieuwe taak toevoegen'),
+          content: TextField(
+            controller: taskController,
+            decoration: const InputDecoration(
+              labelText: 'Taakomschrijving',
+              border: OutlineInputBorder(),
+            ),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Annuleren'),
+            ),
+            TextButton(
+              onPressed: () {
+                if (taskController.text.isNotEmpty) {
+                  setState(() {
+                    // Get the current todoItems or create an empty list if null
+                    List<Map<String, dynamic>> todoItems = 
+                      (projectData['todoItems'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+                    
+                    // Add the new task
+                    todoItems.add({
+                      'id': DateTime.now().millisecondsSinceEpoch.toString(),
+                      'title': taskController.text,
+                      'completed': false,
+                    });
+                    
+                    // Update the project data
+                    projectData['todoItems'] = todoItems;
+                    
+                    // Update in Firebase
+                    _updateProject(projectData);
+                  });
+                  
+                  Navigator.of(context).pop();
+                }
+              },
+              child: const Text('Toevoegen'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+  // Handle task deletion
+  void _deleteTask(Map<String, dynamic> projectData, String taskId) {
+    // Show confirmation dialog
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Taak verwijderen'),
+          content: const Text('Weet u zeker dat u deze taak wilt verwijderen?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Annuleren'),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  List<Map<String, dynamic>> todoItems = 
+                    (projectData['todoItems'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+                  
+                  todoItems.removeWhere((task) => task['id'] == taskId);
+                  projectData['todoItems'] = todoItems;
+                  
+                  // Update in Firebase
+                  _updateProject(projectData);
+                });
+                Navigator.of(context).pop();
+              },
+              child: const Text('Verwijderen', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+  
+  // Edit an existing task
+  void _editTask(Map<String, dynamic> projectData, Map<String, dynamic> task) {
+    final TextEditingController taskController = TextEditingController(text: task['title']);
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Taak bewerken'),
+          content: TextField(
+            controller: taskController,
+            decoration: const InputDecoration(
+              labelText: 'Taakomschrijving',
+              border: OutlineInputBorder(),
+            ),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Annuleren'),
+            ),
+            TextButton(
+              onPressed: () {
+                if (taskController.text.isNotEmpty) {
+                  setState(() {
+                    task['title'] = taskController.text;
+                    
+                    // Update in Firebase
+                    _updateProject(projectData);
+                  });
+                  Navigator.of(context).pop();
+                }
+              },
+              child: const Text('Opslaan'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyTasksState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.check_box_outline_blank,
+            size: 60,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Geen taken gevonden',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Klik op "Nieuwe taak" om een taak toe te voegen',
+            style: TextStyle(
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

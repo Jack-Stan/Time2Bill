@@ -6,6 +6,7 @@ class ProjectCard extends StatelessWidget {
   final String client;
   final String description;
   final String status;
+  final List<Map<String, dynamic>>? todoItems; // Add todoItems parameter
   final VoidCallback onDelete;
   final VoidCallback onEdit;
   final VoidCallback onView;
@@ -17,6 +18,7 @@ class ProjectCard extends StatelessWidget {
     required this.client,
     required this.description,
     required this.status,
+    this.todoItems,
     required this.onDelete,
     required this.onEdit,
     required this.onView,
@@ -35,8 +37,16 @@ class ProjectCard extends StatelessWidget {
     }
   }
 
+  // Calculate how many todos are not completed
+  int _getIncompleteTodoCount() {
+    if (todoItems == null) return 0;
+    return todoItems!.where((todo) => todo['completed'] == false).length;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final incompleteTodos = _getIncompleteTodoCount();
+    
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
@@ -83,16 +93,53 @@ class ProjectCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Icon(Icons.business, size: 16, color: Colors.grey),
-                const SizedBox(width: 4),
-                Text(
-                  client,
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontSize: 14,
-                  ),
+                Row(
+                  children: [
+                    const Icon(Icons.business, size: 16, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    Text(
+                      client,
+                      style: const TextStyle(
+                        color: Colors.grey,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
                 ),
+                // Only show todo badge if there are incomplete todos
+                if (incompleteTodos > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: Colors.orange,
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.check_box_outlined,
+                          size: 12,
+                          color: Colors.orange,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$incompleteTodos todo${incompleteTodos == 1 ? '' : 's'}',
+                          style: const TextStyle(
+                            color: Colors.orange,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
             const SizedBox(height: 12),

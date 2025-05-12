@@ -14,7 +14,8 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   int _selectedIndex = 0;
-  final Color primaryColor = const Color(0xFF0B5394);
+  final Color primaryColor = const Color(0xFF0B5394);  // Key om naar het dashboard overview te verwijzen
+  final _dashboardOverviewKey = GlobalKey<DashboardOverviewState>();
 
   @override
   Widget build(BuildContext context) {
@@ -84,9 +85,8 @@ class _DashboardPageState extends State<DashboardPage> {
                     children: [
                       // Work Timer
                       const WorkTimerWidget(),
-                      const SizedBox(height: 24),
-                      // Recent Activity
-                      const DashboardOverview(),
+                      const SizedBox(height: 24),                      // Recent Activity
+                      DashboardOverview(key: _dashboardOverviewKey),
                     ],
                   )
                 : Row(
@@ -97,11 +97,10 @@ class _DashboardPageState extends State<DashboardPage> {
                         flex: 2,
                         child: WorkTimerWidget(),
                       ),
-                      const SizedBox(width: 24),
-                      // Recent Activity
-                      const Expanded(
+                      const SizedBox(width: 24),                      // Recent Activity
+                      Expanded(
                         flex: 3,
-                        child: DashboardOverview(),
+                        child: DashboardOverview(key: _dashboardOverviewKey),
                       ),
                     ],
                   );

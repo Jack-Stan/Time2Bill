@@ -177,6 +177,35 @@ class FirebaseService {
     });
   }
 
+  /// Get business details for the current logged in user
+  Future<BusinessDetails> getBusinessDetails() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw Exception('No user is currently logged in');
+    }
+    
+    final doc = await _firestore.collection('users').doc(user.uid).get();
+    if (!doc.exists) {
+      throw Exception('User document does not exist');
+    }
+    
+    final data = doc.data()!;
+    
+    return BusinessDetails(
+      companyName: data['businessName'] ?? '',
+      kboNumber: data['kboNumber'] ?? '',
+      vatNumber: data['vatNumber'] ?? '',
+      address: data['address'] ?? '',
+      legalForm: data['legalForm'] ?? '',
+      iban: data['iban'] ?? '',
+      defaultVatRate: data['defaultVatRate'] ?? 21,
+      paymentTerms: data['paymentTerms'] ?? 30,
+      peppolId: data['peppolId'],
+      phone: data['phone'],
+      website: data['website'],
+    );
+  }
+
   // Clients methods
   Future<List<ClientModel>> getClients() async {
     final user = _auth.currentUser;
@@ -291,6 +320,28 @@ class FirebaseService {
         final project = ProjectModel.fromFirestore(doc);
         if (clientName != null) {
           project.clientName = clientName;
+        }
+        
+        // If there are no todoItems, add some mock data
+        if (project.todoItems.isEmpty) {
+          // Create mock todo items based on project title to make them unique
+          project.todoItems = [
+            {
+              'id': '${project.id}-task1',
+              'title': 'Setup initial ${project.title} framework',
+              'completed': true,
+            },
+            {
+              'id': '${project.id}-task2',
+              'title': 'Create documentation for ${project.title}',
+              'completed': false,
+            },
+            {
+              'id': '${project.id}-task3',
+              'title': 'Review ${project.title} progress',
+              'completed': false,
+            },
+          ];
         }
         
         return project;

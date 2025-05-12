@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/timer_state.dart';
+import '../../../services/dashboard_refresh_service.dart';
 
 class WorkTimerWidget extends StatefulWidget {
   const WorkTimerWidget({super.key});
@@ -64,7 +65,6 @@ class _WorkTimerWidgetState extends State<WorkTimerWidget> {
       });
     }
   }
-
   Future<void> _saveTimeEntry(int durationInSeconds) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -78,19 +78,24 @@ class _WorkTimerWidgetState extends State<WorkTimerWidget> {
           .collection('timeTracking')
           .add({
             'projectId': _projectController.text,
+            'projectName': _projectController.text,
             'description': _descriptionController.text,
             'duration': durationInSeconds,
-            'date': Timestamp.fromDate(now),
+            'startTime': Timestamp.fromDate(now),
             'createdAt': Timestamp.fromDate(now),
-            'lastUpdated': Timestamp.fromDate(now),
-          });
-      
-      // Clear description after saving
+            'updatedAt': Timestamp.fromDate(now),
+          });      // Clear description after saving
       _descriptionController.clear();
       
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Time entry saved successfully')),
       );
+      
+      // Stuur een notificatie om de DashboardPage te vernieuwen
+      Provider.of<TimerState>(context, listen: false).resetTimer();
+      
+      // Informeer het dashboard dat het moet vernieuwen
+      DashboardRefreshService().refreshDashboard();
     } catch (e) {
       print('Error saving time entry: $e');
       ScaffoldMessenger.of(context).showSnackBar(

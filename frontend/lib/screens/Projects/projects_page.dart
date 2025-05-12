@@ -48,6 +48,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
           'startDate': project.startDate,
           'endDate': project.endDate,
           'clientId': project.clientId ?? '',
+          'todoItems': project.todoItems, // Include todoItems in the map
         };
       }).toList();
 
@@ -250,8 +251,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
         mainAxisSpacing: 16,
         childAspectRatio: 1.5,
       ),
-      itemCount: _projects.length,
-      itemBuilder: (context, index) {
+      itemCount: _projects.length,      itemBuilder: (context, index) {
         final project = _projects[index];
         return ProjectCard(
           id: project['id'],
@@ -259,6 +259,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
           client: project['client'],
           description: project['description'],
           status: project['status'],
+          todoItems: project['todoItems'] as List<Map<String, dynamic>>?, // Pass todoItems to card
           onDelete: () => _deleteProject(project['id']),
           onEdit: () {
             // Handle edit - could open a prefilled form
