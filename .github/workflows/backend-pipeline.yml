@@ -2,7 +2,7 @@ name: Backend CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, dev ]
+    branches: [ main, dev, feature/1.0-setup ]
     paths:
       - 'backend/**'
   pull_request:
@@ -67,20 +67,20 @@ jobs:
     - name: Install dependencies
       run: npm ci
     
-    - name: Set up Google Cloud SDK
-      uses: google-github-actions/auth@v1
+    - name: Setup Firebase
+      uses: w9jds/firebase-action@master
       with:
-        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        args: setup:emulators:firestore
+      env:
+        GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
     
     - name: Deploy to Dev Environment
-      uses: google-github-actions/deploy-cloud-functions@v1
+      uses: w9jds/firebase-action@master
       with:
-        name: time2bill-api-dev
-        runtime: nodejs18
-        source_dir: ./backend
-        entry_point: app
-        env_vars: |
-          NODE_ENV=development
+        args: deploy --only functions -P dev
+      env:
+        GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        NODE_ENV: development
   
   deploy-prod:
     needs: test
@@ -103,17 +103,17 @@ jobs:
     - name: Install dependencies
       run: npm ci
     
-    - name: Set up Google Cloud SDK
-      uses: google-github-actions/auth@v1
+    - name: Setup Firebase
+      uses: w9jds/firebase-action@master
       with:
-        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        args: setup:emulators:firestore
+      env:
+        GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
     
     - name: Deploy to Production Environment
-      uses: google-github-actions/deploy-cloud-functions@v1
+      uses: w9jds/firebase-action@master
       with:
-        name: time2bill-api-prod
-        runtime: nodejs18
-        source_dir: ./backend
-        entry_point: app
-        env_vars: |
-          NODE_ENV=production
+        args: deploy --only functions -P prod
+      env:
+        GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        NODE_ENV: production
