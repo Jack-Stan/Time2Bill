@@ -13,6 +13,8 @@ class TimeEntryModel {
   final bool billable;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final String? taskId;
+  final String? taskTitle;
 
   TimeEntryModel({
     this.id = '',
@@ -27,6 +29,8 @@ class TimeEntryModel {
     this.billable = true,
     this.createdAt,
     this.updatedAt,
+    this.taskId,
+    this.taskTitle,
   });
 
   factory TimeEntryModel.fromFirestore(DocumentSnapshot doc) {
@@ -45,6 +49,8 @@ class TimeEntryModel {
       billable: data['billable'] ?? true,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
+      taskId: data['taskId'],
+      taskTitle: data['taskTitle'],
     );
   }
 
@@ -61,6 +67,8 @@ class TimeEntryModel {
       'billable': billable,
       'updatedAt': FieldValue.serverTimestamp(),
       if (createdAt == null) 'createdAt': FieldValue.serverTimestamp(),
+      if (taskId != null) 'taskId': taskId,
+      if (taskTitle != null) 'taskTitle': taskTitle,
     };
   }
 }

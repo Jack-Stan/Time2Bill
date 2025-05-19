@@ -1,18 +1,21 @@
 import express from 'express';
 import { getFirebaseAdmin } from '../config/firebase.config.js';
+import { validateRequest } from '../middleware/validation.middleware.js';
+import { 
+  createProjectSchema, 
+  updateProjectSchema, 
+  createTodoSchema, 
+  timeTrackingSchema
+} from '../schemas/project.schema.js';
 
 const router = express.Router();
 const admin = getFirebaseAdmin();
 
-// Create a new project
-router.post('/:userId', async (req, res) => {
+// Create a new project with validation
+router.post('/:userId', validateRequest(createProjectSchema), async (req, res) => {
   try {
     const { userId } = req.params;
     const { title, description, clientId, status = 'active' } = req.body;
-    
-    if (!title || !clientId) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
     
     // Create a project document in the projects subcollection
     const projectRef = admin.firestore()
@@ -107,8 +110,8 @@ router.get('/:userId/:projectId', async (req, res) => {
   }
 });
 
-// Update a project
-router.put('/:userId/:projectId', async (req, res) => {
+// Update a project with validation
+router.put('/:userId/:projectId', validateRequest(updateProjectSchema), async (req, res) => {
   try {
     const { userId, projectId } = req.params;
     const updateData = req.body;
@@ -184,15 +187,11 @@ router.delete('/:userId/:projectId', async (req, res) => {
   }
 });
 
-// Create a todo for a project
-router.post('/:userId/:projectId/todos', async (req, res) => {
+// Create a todo for a project with validation
+router.post('/:userId/:projectId/todos', validateRequest(createTodoSchema), async (req, res) => {
   try {
     const { userId, projectId } = req.params;
     const { title, description, deadline, status = 'pending' } = req.body;
-    
-    if (!title) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
     
     const todoRef = admin.firestore()
       .collection('users')
@@ -251,15 +250,11 @@ router.get('/:userId/:projectId/todos', async (req, res) => {
   }
 });
 
-// Add a time tracking entry for a project
-router.post('/:userId/:projectId/time-tracking', async (req, res) => {
+// Add a time tracking entry for a project with validation
+router.post('/:userId/:projectId/time-tracking', validateRequest(timeTrackingSchema), async (req, res) => {
   try {
     const { userId, projectId } = req.params;
     const { startTime, endTime, duration, todoId, description } = req.body;
-    
-    if (!startTime || !duration) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
     
     const timeTrackRef = admin.firestore()
       .collection('users')

@@ -180,11 +180,10 @@ class _DashboardPageState extends State<DashboardPage> {
                   child: const Text('Test Permissions'),
                 ),
               ),
-              const SizedBox(width: 8),
-              Flexible(
+              const SizedBox(width: 8),              Flexible(
                 child: ElevatedButton.icon(
                   onPressed: () {
-                    // TODO: Implement new invoice action
+                    Navigator.pushNamed(context, '/invoices', arguments: {'createNew': true});
                   },
                   icon: const Icon(Icons.add),
                   label: const Text('New Invoice'),

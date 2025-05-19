@@ -10,16 +10,6 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
     
-    function isValidNewData() {
-      return request.resource.data.keys().hasOnly(['fullName', 'email', 'createdAt', 'updatedAt', 'status', 'role', 'lastLogin', 'profile_completed', 'businessDetails', 'bankingDetails']) &&
-             request.resource.data.fullName is string &&
-             request.resource.data.email is string &&
-             (request.resource.data.status == 'pending_verification' ||
-              request.resource.data.status == 'email_verified' ||
-              request.resource.data.status == 'business_details_added' ||
-              request.resource.data.status == 'active');
-    }
-    
     // Base rules - deny by default
     match /{document=**} {
       allow read, write: if false;
@@ -29,9 +19,7 @@ service cloud.firestore {
     match /users/{userId} {
       // User can read/write their own profile
       allow read: if isOwner(userId);
-      allow create: if isSignedIn() && request.auth.uid == userId && isValidNewData();
-      allow update: if isOwner(userId);
-      allow delete: if false; // Prevent accidental user deletion
+      allow write: if isOwner(userId);
       
       // Client subcollection
       match /clients/{clientId} {
@@ -67,12 +55,6 @@ service cloud.firestore {
       match /invoices/{invoiceId} {
         allow read, write: if isOwner(userId);
       }
-    }
-    
-    // Allow admins to read users
-    match /users/{userId} {
-      allow read: if isSignedIn() && 
-                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
   }
 }

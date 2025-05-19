@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'screens/Landingscreen/LandingPage.dart';
 import 'screens/Featuresscreen/FeaturesPage.dart';
 import 'screens/Aboutscreen/AboutPage.dart';
@@ -126,6 +127,7 @@ class MyApp extends StatelessWidget {
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0B5394)),
           useMaterial3: true,
+          textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme),
         ),
         builder: (context, child) {
           // Wrap hele app in connectivity monitor

@@ -40,6 +40,8 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
   DateTime? _startTime;
   DateTime? _endTime;
   bool _isBillable = true;
+  String? _selectedTaskId;
+  List<Map<String, dynamic>> _tasksForSelectedProject = [];
   
   // Stats
   Duration _todayDuration = Duration.zero;
@@ -53,6 +55,78 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
     _loadData();
     _loadClients();
     _calculateStats();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    
+    // Handle route arguments if they exist
+    final routeArgs = ModalRoute.of(context)?.settings.arguments;
+    if (routeArgs != null && routeArgs is Map<String, dynamic>) {
+      // If project ID is passed, select it
+      if (routeArgs.containsKey('selectedProjectId')) {
+        final projectId = routeArgs['selectedProjectId'] as String?;
+        if (projectId != null && _selectedProjectId != projectId) {
+          _selectedProjectId = projectId;
+          
+          // Ensure projects are loaded before accessing them
+          if (_projects.isNotEmpty) {
+            // Find the project in the list
+            final project = _projects.firstWhere(
+              (p) => p.id == projectId,
+              orElse: () => ProjectModel(
+                title: '',
+                clientId: '',
+                clientName: '',
+                hourlyRate: 0,
+                startDate: DateTime.now(),
+              ),
+            );
+            
+            // Set client ID if available
+            if (project.clientId != null && project.clientId!.isNotEmpty) {
+              _selectedClientId = project.clientId;
+            }
+            
+            // Update tasks for the selected project
+            _tasksForSelectedProject = _getTasksForProject(projectId);
+            
+            // If a suggested task ID is passed, select it
+            if (routeArgs.containsKey('suggestedTaskId')) {
+              final taskId = routeArgs['suggestedTaskId'] as String?;
+              if (taskId != null && _tasksForSelectedProject.any((t) => t['id'] == taskId)) {
+                _selectedTaskId = taskId;
+                
+                // Optionally pre-fill the description with the task title
+                final task = _tasksForSelectedProject.firstWhere(
+                  (t) => t['id'] == taskId,
+                  orElse: () => {'title': ''},
+                );
+                if (task['title'] != null && task['title'].toString().isNotEmpty) {
+                  _descriptionController.text = task['title'];
+                }
+                
+                // Auto-open the time entry modal
+                Future.delayed(const Duration(milliseconds: 500), () {
+                  if (mounted) {
+                    _showAddTimeEntryModal();
+                  }
+                });
+              }
+            }
+          } else {
+            // If projects aren't loaded yet, we'll handle this after loading
+            // Store the IDs to use after loading is complete
+            Future.delayed(const Duration(seconds: 1), () {
+              if (mounted && _projects.isNotEmpty) {
+                didChangeDependencies();
+              }
+            });
+          }
+        }
+      }
+    }
   }
 
   @override
@@ -268,6 +342,8 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
       String? projectName;
       String? clientId = _selectedClientId;
       String? clientName;
+      String? taskId = _selectedTaskId;
+      String? taskTitle;
       
       if (_selectedProjectId != null) {
         final project = _projects.firstWhere(
@@ -295,6 +371,21 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
           );
           clientName = client.name;
         }
+        
+        // Get task title if a task is selected
+        if (taskId != null && taskId.isNotEmpty) {
+          final tasks = _getTasksForProject(_selectedProjectId);
+          final task = tasks.firstWhere(
+            (t) => t['id'] == taskId,
+            orElse: () => {'title': 'Unknown Task'},
+          );
+          taskTitle = task['title'] as String?;
+          
+          // If no description was entered, use the task title
+          if (_descriptionController.text.isEmpty && taskTitle != null) {
+            _descriptionController.text = taskTitle;
+          }
+        }
       }
 
       // Maak TimeEntry model
@@ -308,6 +399,8 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
         clientId: clientId,
         clientName: clientName,
         billable: _isBillable,
+        taskId: taskId,
+        taskTitle: taskTitle,
       );
 
       print('Saving time entry: ${newTimeEntry.toMap()}');
@@ -316,51 +409,48 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
       try {
         final String entryId = await _firebaseService.addTimeEntry(newTimeEntry);
         print('Successfully saved time entry with ID: $entryId');
+          // If this is linked to a task, refresh the project to update task status if needed
+        if (taskId != null && _selectedProjectId != null) {
+          _updateProjectTask(_selectedProjectId!, taskId);
+        }
       } catch (e) {
-        print('Error saving time entry via service: $e');
-        
-        // Fallback naar directe Firestore-schrijfoperatie
-        final user = FirebaseAuth.instance.currentUser;
-        if (user == null) throw Exception('User not authenticated');
-        
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('timeTracking')
-            .add(newTimeEntry.toMap());
-            
-        print('Successfully saved time entry via direct Firestore write');
+        print('Error saving time entry: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving time entry: $e')),
+        );
       }
-
-      // Reset form
-      _descriptionController.clear();
-      setState(() {
-        _selectedProjectId = null;
-        _selectedClientId = null;
-        _startTime = null;
-        _endTime = null;
-        _isBillable = true;
-      });
-
-      // Refresh time entries list
-      _loadData();
-      _calculateStats();
       
-      // Toon succes melding
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Time entry saved successfully')),
-      );
+      // Refresh time entries
+      await _loadData();
+      
     } catch (e) {
-      print('Error adding time entry: $e');
-      if (!mounted) return;
+      print('Error in _addTimeEntry: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error saving time entry: ${e.toString()}')),
+        SnackBar(content: Text('Error: $e')),
       );
     } finally {
       setState(() {
         _isSaving = false;
+        _descriptionController.clear();
+        _selectedClientId = null;
+        _selectedProjectId = null;
+        _selectedTaskId = null;
+        _startTime = null;
+        _endTime = null;
+        _isBillable = true;
+        _tasksForSelectedProject = [];
       });
+    }
+  }
+  
+  // Method to update project task if needed (mark as in progress, etc.)
+  Future<void> _updateProjectTask(String projectId, String taskId) async {
+    try {
+      // This is where you could update the task status to "in progress" or similar
+      // For now, we'll just log it
+      print('Time entry added for project $projectId, task $taskId');
+    } catch (e) {
+      print('Error updating project task: $e');
     }
   }
 
@@ -436,7 +526,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
                       ),
                       value: _selectedClientId,
                       items: [
-                        const DropdownMenuItem(
+                        const DropdownMenuItem<String>(
                           value: null,
                           child: Text('No Client'),
                         ),
@@ -496,6 +586,32 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
                               _selectedClientId = project.clientId;
                             }
                           }
+                          _tasksForSelectedProject = _getTasksForProject(value);
+                          _selectedTaskId = null;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Task dropdown - filtered by selected project
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        labelText: 'Task',
+                        border: OutlineInputBorder(),
+                      ),
+                      value: _selectedTaskId,
+                      items: [                        const DropdownMenuItem<String>(
+                          value: null,
+                          child: Text('No Task'),
+                        ),
+                        ..._tasksForSelectedProject.map((task) => DropdownMenuItem<String>(
+                          value: task['id'],
+                          child: Text(task['title']),
+                        )).toList(),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedTaskId = value;
                         });
                       },
                     ),
@@ -622,6 +738,49 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
         }
       ),
     );
+  }
+
+  // Get tasks for the selected project
+  List<Map<String, dynamic>> _getTasksForProject(String? projectId) {
+    if (projectId == null) return [];
+    
+    // Find the project with the matching ID
+    final project = _projects.firstWhere(
+      (p) => p.id == projectId, 
+      orElse: () => ProjectModel(title: '', hourlyRate: 0, startDate: DateTime.now())
+    );
+    
+    // Return todo items, filtering out completed ones
+    return project.todoItems
+        .where((task) => task['completed'] == false)
+        .toList();
+  }
+
+  // Get tasks for the selected project
+  void _updateTasksForProject(String? projectId, StateSetter dialogSetState) {
+    if (projectId == null) {
+      dialogSetState(() {
+        _tasksForSelectedProject = [];
+        _selectedTaskId = null;
+      });
+      return;
+    }
+    
+    // Find the project with the matching ID
+    final project = _projects.firstWhere(
+      (p) => p.id == projectId, 
+      orElse: () => ProjectModel(title: '', hourlyRate: 0, startDate: DateTime.now())
+    );
+    
+    // Get todo items, filtering out completed ones
+    final tasks = project.todoItems
+        .where((task) => task['completed'] == false)
+        .toList();
+        
+    dialogSetState(() {
+      _tasksForSelectedProject = tasks;
+      _selectedTaskId = tasks.isNotEmpty ? tasks.first['id'] : null;
+    });
   }
 
   Widget _buildTimerSection() {
@@ -855,30 +1014,32 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
                       value: project.id,
                       child: Text(project.title),
                     )).toList(),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    _selectedProjectId = value;
-                    
-                    // If no client is selected, set the client based on the project
-                    if (_selectedClientId == null && value != null) {
-                      final project = _projects.firstWhere(
-                        (p) => p.id == value,
-                        orElse: () => ProjectModel(
-                          title: '',
-                          clientId: '',
-                          clientName: '',
-                          hourlyRate: 0,
-                          startDate: DateTime.now(),
-                        ),
-                      );
-                      
-                      if (project.clientId != null && project.clientId!.isNotEmpty) {
-                        _selectedClientId = project.clientId;
-                      }
-                    }
-                  });
-                },
+                ],                      onChanged: (value) {
+                        setState(() {
+                          _selectedProjectId = value;
+                          
+                          // If no client is selected, set the client based on the project
+                          if (_selectedClientId == null && value != null) {
+                            final project = _projects.firstWhere(
+                              (p) => p.id == value,
+                              orElse: () => ProjectModel(
+                                title: '',
+                                clientId: '',
+                                clientName: '',
+                                hourlyRate: 0,
+                                startDate: DateTime.now(),
+                              ),
+                            );
+                            
+                            if (project.clientId != null && project.clientId!.isNotEmpty) {
+                              _selectedClientId = project.clientId;
+                            }
+                          }
+                        });
+                        
+                        // Update available tasks when project changes
+                        _updateTasksForProject(value, setState);
+                      },
               ),
             ),
           ],
@@ -1331,7 +1492,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
-              _deleteTimeEntry(entry.id!);
+              _deleteTimeEntry(entry.id);
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Delete'),

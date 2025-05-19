@@ -54,6 +54,38 @@ class _InvoicesPageState extends State<InvoicesPage> with SingleTickerProviderSt
     super.dispose();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    
+    // Check for route arguments to see if we should show the new invoice form
+    final arguments = ModalRoute.of(context)?.settings.arguments;
+    if (arguments != null && arguments is Map<String, dynamic>) {
+      final createNew = arguments['createNew'] as bool?;
+      if (createNew == true) {
+        // Wait for the widget to be built completely before showing the dialog
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _showNewInvoiceForm();
+        });
+      }
+    }
+  }
+  
+  // Show the new invoice form dialog
+  void _showNewInvoiceForm() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.8,
+          height: MediaQuery.of(context).size.height * 0.9,
+          padding: const EdgeInsets.all(16),
+          child: const NewInvoiceForm(),
+        ),
+      ),
+    );
+  }
+
   Future<void> _fetchInvoices() async {
     setState(() {
       _isLoading = true;
@@ -187,15 +219,6 @@ class _InvoicesPageState extends State<InvoicesPage> with SingleTickerProviderSt
         },
       ),
     );
-  }
-
-  void _showNewInvoiceForm() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return const NewInvoiceForm();
-      },
-    ).then((_) => _fetchInvoices());
   }
 
   void _showNewRecurringInvoiceForm() {

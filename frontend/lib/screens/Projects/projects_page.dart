@@ -4,7 +4,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Dashboard/widgets/sidebar.dart';
 import 'widgets/project_card.dart';
 import 'widgets/new_project_form.dart';
+import 'widgets/edit_project_form.dart'; // Import the edit form
 import '../../services/firebase_service.dart';
+import '../../models/project_model.dart'; // Import ProjectModel
 
 class ProjectsPage extends StatefulWidget {
   const ProjectsPage({super.key});
@@ -19,6 +21,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
   bool _isLoading = false;
   String? _errorMessage;
   List<Map<String, dynamic>> _projects = [];
+  final FirebaseService _firebaseService = FirebaseService();
 
   @override
   void initState() {
@@ -33,8 +36,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
     });
 
     try {
-      final firebaseService = FirebaseService();
-      final projects = await firebaseService.getProjects();
+      final projects = await _firebaseService.getProjects();
       
       // Convert ProjectModel objects to the map format used by the UI
       final projectsData = projects.map((project) {
@@ -48,7 +50,8 @@ class _ProjectsPageState extends State<ProjectsPage> {
           'startDate': project.startDate,
           'endDate': project.endDate,
           'clientId': project.clientId ?? '',
-          'todoItems': project.todoItems, // Include todoItems in the map
+          'todoItems': project.todoItems,
+          'projectModel': project, // Store the entire model for easy editing
         };
       }).toList();
 
@@ -74,6 +77,33 @@ class _ProjectsPageState extends State<ProjectsPage> {
         );
       },
     );
+  }
+
+  void _openEditProjectForm(Map<String, dynamic> project) {
+    // Get the ProjectModel from the map
+    final ProjectModel projectModel = project['projectModel'];
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return EditProjectForm(
+          project: projectModel,
+          onProjectUpdated: _fetchProjects, // Refresh list after updating
+        );
+      },
+    );
+  }
+
+  void _navigateToProjectDetail(Map<String, dynamic> project) {
+    // Navigate to project detail page and pass the project data
+    Navigator.pushNamed(
+      context, 
+      '/project-detail',
+      arguments: project,
+    ).then((_) {
+      // Refresh project list when returning from detail page
+      _fetchProjects();
+    });
   }
 
   Future<void> _deleteProject(String projectId) async {
@@ -261,17 +291,8 @@ class _ProjectsPageState extends State<ProjectsPage> {
           status: project['status'],
           todoItems: project['todoItems'] as List<Map<String, dynamic>>?, // Pass todoItems to card
           onDelete: () => _deleteProject(project['id']),
-          onEdit: () {
-            // Handle edit - could open a prefilled form
-          },
-          onView: () {
-            // Navigate to project detail view
-            Navigator.pushNamed(
-              context, 
-              '/project-detail',
-              arguments: project,
-            );
-          },
+          onEdit: () => _openEditProjectForm(project),
+          onView: () => _navigateToProjectDetail(project),
         );
       },
     );

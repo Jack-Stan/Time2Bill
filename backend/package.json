@@ -6,16 +6,23 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "deploy-rules": "firebase deploy --only firestore:rules"
+    "deploy-rules": "firebase deploy --only firestore:rules",
+    "deploy-indexes": "firebase deploy --only firestore:indexes",
+    "backup": "node scripts/backup_firestore.js",
+    "restore": "node scripts/restore_firestore.js",
+    "secure": "firebase deploy --only firestore:rules",
+    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage",
+    "test:watch": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --watch"
   },
   "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "firebase-admin": "^12.0.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1"
+    "joi": "^17.13.3"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2",
-    "firebase-tools": "^12.9.1"
+    "firebase-tools": "^12.9.1",
+    "nodemon": "^3.0.2"
   }
 }

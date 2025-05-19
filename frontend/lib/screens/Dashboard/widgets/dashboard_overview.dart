@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'dart:async';
 import '../../../services/firebase_service.dart';
 import '../../../services/dashboard_refresh_service.dart';
 
@@ -18,6 +19,7 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
   String? _errorMessage;
   List<Map<String, dynamic>> _activities = [];
   final FirebaseService _firebaseService = FirebaseService();
+  StreamSubscription<bool>? _refreshSubscription;
 
   @override
   void initState() {
@@ -25,12 +27,22 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
     _fetchRecentActivity();
     // Registreer voor app lifecycle events
     WidgetsBinding.instance.addObserver(this);
+    
+    // Luisteren naar refresh events van de Dashboard service
+    final refreshService = DashboardRefreshService();
+    _refreshSubscription = refreshService.refreshStream.listen((refresh) {
+      if (mounted && refresh) {
+        _fetchRecentActivity();
+      }
+    });
   }
 
   @override
   void dispose() {
     // Verwijder de observer bij het vernietigen van de widget
     WidgetsBinding.instance.removeObserver(this);
+    // Annuleer de subscription
+    _refreshSubscription?.cancel();
     super.dispose();
   }
 
@@ -46,7 +58,6 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
   void refreshActivity() {
     _fetchRecentActivity();
   }
-
   Future<void> _fetchRecentActivity() async {
     setState(() {
       _isLoading = true;
@@ -59,112 +70,55 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
       if (user == null) {
         throw Exception('User not authenticated');
       }
-      print('Fetching activity for user: ${user.uid}');
+      print('Fetching recent time entries for user: ${user.uid}');
 
       List<Map<String, dynamic>> activities = [];
 
-      // Een betere aanpak: gebruik de FirebaseService
       try {
-        // Fetch invoices using the service
-        print('\n1. Fetching most recent invoices via Firebase Service...');
-        final invoices = await _firebaseService.getInvoices();
+        // Alleen tijdregistraties ophalen via de service
+        print('Fetching time entries via Firebase Service...');
+        // Haal tot 10 entries op zodat we meer recente activiteiten kunnen tonen
+        final timeEntries = await _firebaseService.getTimeEntries();
         
-        // Neem alleen de eerste 5 facturen
-        final recentInvoices = invoices.take(5).map((invoice) {
-          final dateStr = invoice.invoiceDate != null
-              ? DateFormat('dd/MM/yyyy').format(invoice.invoiceDate)
-              : 'Unknown date';
+        // Neem de eerste 10 tijdregistraties
+        if (timeEntries.isNotEmpty) {
+          final recentTimeEntries = timeEntries.take(10).map((entry) {
+            final dateStr = DateFormat('dd/MM/yyyy').format(entry.startTime);
 
-          return {
-            'id': invoice.id,
-            'type': 'invoice',
-            'title': invoice.invoiceNumber,
-            'subtitle': 'Created on $dateStr',
-            'amount': '€${invoice.total.toStringAsFixed(2)}',
-            'icon': Icons.description,
-            'createdAt': Timestamp.fromDate(invoice.invoiceDate),
-          };
-        }).toList();
+            // Convert duration (seconds) to hours and minutes
+            final durationSeconds = entry.duration.toInt();
+            final hours = durationSeconds ~/ 3600;
+            final minutes = (durationSeconds % 3600) ~/ 60;
+            final durationStr = '${hours}h ${minutes}m';
 
-        activities.addAll(recentInvoices);
-        print('✅ Successfully fetched ${recentInvoices.length} invoices via service');
-      } catch (e) {
-        print('❌ Error fetching invoices via service: $e');
-        
-        // Fallback naar de directe Firestore aanpak indien de service faalt
-        try {
-          print('\n1b. Falling back to direct Firestore query for invoices...');
-          final invoicesRef = FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .collection('invoices');
-          
-          final invoicesSnapshot = await invoicesRef
-              .orderBy('createdAt', descending: true)
-              .limit(5)
-              .get();
-
-          final invoiceActivities = invoicesSnapshot.docs.map((doc) {
-            final data = doc.data();
-            final timestamp = data['createdAt'] as Timestamp?;
-            final dateStr = timestamp != null
-                ? DateFormat('dd/MM/yyyy').format(timestamp.toDate())
-                : 'Unknown date';
+            // Bepaal de titel en ondertitel
+            String title = entry.description;
+            String subtitle = entry.projectName != null && entry.projectName!.isNotEmpty 
+                ? '${entry.projectName} - $dateStr' 
+                : dateStr;
 
             return {
-              'id': doc.id,
-              'type': 'invoice',
-              'title': data['invoiceNumber'] ?? 'Invoice',
-              'subtitle': 'Created on $dateStr',
-              'amount': data['total'] != null ? '€${data['total']}' : '',
-              'icon': Icons.description,
-              'createdAt': timestamp,
+              'id': entry.id,
+              'type': 'time',
+              'title': title,
+              'subtitle': subtitle,
+              'amount': durationStr,
+              'icon': Icons.timer,
+              'createdAt': Timestamp.fromDate(entry.startTime),
+              'projectId': entry.projectId,
+              'projectName': entry.projectName,
             };
           }).toList();
 
-          activities.addAll(invoiceActivities);
-          print('✅ Successfully fetched ${invoiceActivities.length} invoices via direct query');
-        } catch (e2) {
-          print('❌ Error in fallback invoice query: $e2');
+          activities.addAll(recentTimeEntries);
+          print('✅ Successfully fetched ${recentTimeEntries.length} time entries via service');
         }
-      }
-
-      try {
-        // Fetch time entries using the service
-        print('\n2. Fetching time entries via Firebase Service...');
-        final timeEntries = await _firebaseService.getTimeEntries();
-        
-        // Neem alleen de eerste 5 tijdregistraties
-        final recentTimeEntries = timeEntries.take(5).map((entry) {
-          final dateStr = entry.startTime != null
-              ? DateFormat('dd/MM/yyyy').format(entry.startTime)
-              : 'Unknown date';
-
-          // Convert duration (seconds) to hours and minutes
-          final durationSeconds = entry.duration.toInt();
-          final hours = durationSeconds ~/ 3600;
-          final minutes = (durationSeconds % 3600) ~/ 60;
-          final durationStr = '${hours}h ${minutes}m';
-
-          return {
-            'id': entry.id,
-            'type': 'time',
-            'title': entry.description,
-            'subtitle': dateStr,
-            'amount': durationStr,
-            'icon': Icons.timer,
-            'createdAt': Timestamp.fromDate(entry.startTime),
-          };
-        }).toList();
-
-        activities.addAll(recentTimeEntries);
-        print('✅ Successfully fetched ${recentTimeEntries.length} time entries via service');
       } catch (e) {
         print('❌ Error fetching time entries via service: $e');
         
         // Fallback direct query
         try {
-          print('\n2b. Falling back to direct Firestore query for time entries...');
+          print('\nFalling back to direct Firestore query for time entries...');
           final timeEntriesRef = FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
@@ -172,7 +126,7 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
           
           final timeEntriesSnapshot = await timeEntriesRef
               .orderBy('createdAt', descending: true)
-              .limit(5)
+              .limit(10)  // 10 entries tonen
               .get();
 
           final timeEntryActivities = timeEntriesSnapshot.docs.map((doc) {
@@ -188,14 +142,22 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
             final minutes = (durationSeconds % 3600) ~/ 60;
             final durationStr = '${hours}h ${minutes}m';
 
+            // Bepaal de titel en ondertitel met projectnaam indien beschikbaar
+            final projectName = data['projectName'] as String?;
+            String subtitle = projectName != null && projectName.isNotEmpty 
+                ? '$projectName - $dateStr' 
+                : dateStr;
+
             return {
               'id': doc.id,
               'type': 'time',
               'title': data['description'] ?? 'Time Entry',
-              'subtitle': dateStr,
+              'subtitle': subtitle,
               'amount': durationStr,
               'icon': Icons.timer,
               'createdAt': timestamp,
+              'projectId': data['projectId'],
+              'projectName': projectName,
             };
           }).toList();
 
@@ -204,9 +166,7 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
         } catch (e2) {
           print('❌ Error in fallback time entries query: $e2');
         }
-      }
-
-      // Create a combined, sorted list using createdAt timestamps
+      }      // Sort the time entries by creation date
       if (activities.isNotEmpty) {
         activities.sort((a, b) {
           final aTime = a['createdAt'] as Timestamp?;
@@ -219,7 +179,7 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
           return bTime.compareTo(aTime); // descending order (newest first)
         });
       } else {
-        print('\n⚠️ No activities found.');
+        print('\n⚠️ No time entries found.');
       }
 
       setState(() {
@@ -246,19 +206,21 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
+            padding: const EdgeInsets.all(16),            child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'Recent Activity',
+                  'Recent Time Entries',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 TextButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    // Navigeer naar een dedicated activity page of toon meer activiteiten
+                    Navigator.pushNamed(context, '/time-tracking'); // Als tijdelijke oplossing
+                  },
                   child: const Text('View All'),
                 ),
               ],
@@ -288,8 +250,7 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
                   ],
                 ),
               ),
-            )
-          else if (_activities.isEmpty)
+            )          else if (_activities.isEmpty)
             const SizedBox(
               height: 200,
               child: Center(
@@ -299,7 +260,7 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
                     Icon(Icons.info_outline, size: 40, color: Colors.grey),
                     SizedBox(height: 16),
                     Text(
-                      'No activity data available yet',
+                      'No time entries available yet',
                       style: TextStyle(
                         fontSize: 16,
                         color: Colors.grey,
@@ -307,7 +268,7 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
                     ),
                     SizedBox(height: 8),
                     Text(
-                      'Start tracking time or creating invoices',
+                      'Start tracking time for your projects',
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey,
@@ -332,9 +293,15 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
                       color: const Color(0xFF0B5394),
                     ),
                   ),
-                  title: Text(activity['title'] ?? 'Untitled'),
-                  subtitle: Text(activity['subtitle'] ?? ''),
-                  trailing: Text(activity['amount'] ?? ''),
+                  title: Text(activity['title'] ?? 'Untitled'),                  subtitle: Text(activity['subtitle'] ?? ''),
+                  trailing: Text(activity['amount'] ?? ''),                  onTap: () {
+                    // Altijd naar time-tracking navigeren met de juiste parameters
+                    Navigator.pushNamed(
+                      context, 
+                      '/time-tracking', 
+                      arguments: {'id': activity['id']},
+                    );
+                  },
                 );
               },
             ),

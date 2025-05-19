@@ -4,10 +4,12 @@ import { initializeFirebaseAdmin, getFirebaseAdmin } from './config/firebase.con
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { authMiddleware } from './middleware/auth.middleware.js';
 import userRoutes from './routes/users.js';
 import projectRoutes from './routes/projects.js';
 import clientRoutes from './routes/clients.js';
 import invoiceRoutes from './routes/invoices.js';
+import configRoutes from './routes/config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -42,12 +44,11 @@ app.use(express.json());
 initializeFirebaseAdmin();
 const admin = getFirebaseAdmin();
 
-// Test route
+// Public routes
 app.get('/api/test', (req, res) => {
   res.json({ message: 'Backend is working!' });
 });
 
-// Health check route
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok',
@@ -55,11 +56,15 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Add routes
+app.use('/api/config', configRoutes);
+
+// Registration route doesn't need auth
 app.use('/api/users', userRoutes);
-app.use('/api/projects', projectRoutes);
-app.use('/api/clients', clientRoutes);
-app.use('/api/invoices', invoiceRoutes);
+
+// Protected routes with authentication middleware
+app.use('/api/projects', authMiddleware, projectRoutes);
+app.use('/api/clients', authMiddleware, clientRoutes);
+app.use('/api/invoices', authMiddleware, invoiceRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

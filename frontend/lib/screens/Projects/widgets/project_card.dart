@@ -6,7 +6,7 @@ class ProjectCard extends StatelessWidget {
   final String client;
   final String description;
   final String status;
-  final List<Map<String, dynamic>>? todoItems; // Add todoItems parameter
+  final List<Map<String, dynamic>>? todoItems;
   final VoidCallback onDelete;
   final VoidCallback onEdit;
   final VoidCallback onView;
@@ -185,10 +185,8 @@ class ProjectCard extends StatelessWidget {
                                 Navigator.of(context).pop();
                                 onDelete();
                               },
-                              child: const Text(
-                                'Verwijderen',
-                                style: TextStyle(color: Colors.red),
-                              ),
+                              style: TextButton.styleFrom(foregroundColor: Colors.red),
+                              child: const Text('Verwijderen'),
                             ),
                           ],
                         );

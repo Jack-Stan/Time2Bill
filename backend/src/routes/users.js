@@ -1,11 +1,38 @@
 import express from 'express';
 import { getFirebaseAdmin } from '../config/firebase.config.js';
+import { authMiddleware } from '../middleware/auth.middleware.js';
+import { validateRequest } from '../middleware/validation.middleware.js';
+import Joi from 'joi';
 
 const router = express.Router();
 const admin = getFirebaseAdmin();
 
-// User registration
-router.post('/', async (req, res) => {
+// Validation schemas
+const userRegisterSchema = Joi.object({
+  email: Joi.string().email().required(),
+  password: Joi.string().min(6).required(),
+  fullName: Joi.string().required().min(3)
+});
+
+const businessDetailsSchema = Joi.object({
+  companyName: Joi.string().required(),
+  address: Joi.string().required(),
+  city: Joi.string().required(),
+  postalCode: Joi.string().required(),
+  country: Joi.string().required(),
+  vatNumber: Joi.string().allow(null, ''),
+  peppolId: Joi.string().allow(null, '')
+});
+
+const bankingDetailsSchema = Joi.object({
+  accountNumber: Joi.string().required(),
+  bankName: Joi.string().required(),
+  accountHolder: Joi.string().required(),
+  swiftBic: Joi.string().allow(null, '')
+});
+
+// User registration - no auth required
+router.post('/', validateRequest(userRegisterSchema), async (req, res) => {
   try {
     console.log('Step 1: Received registration request:', req.body);
 
@@ -64,8 +91,10 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Protected routes below - require authentication
+
 // Update business details
-router.put('/:userId/business-details', async (req, res) => {
+router.put('/:userId/business-details', authMiddleware, validateRequest(businessDetailsSchema), async (req, res) => {
   try {
     const { userId } = req.params;
     const details = req.body;
@@ -91,7 +120,7 @@ router.put('/:userId/business-details', async (req, res) => {
 });
 
 // Update banking details
-router.put('/:userId/banking-details', async (req, res) => {
+router.put('/:userId/banking-details', authMiddleware, validateRequest(bankingDetailsSchema), async (req, res) => {
   try {
     const { userId } = req.params;
     const details = req.body;
@@ -109,7 +138,7 @@ router.put('/:userId/banking-details', async (req, res) => {
 });
 
 // Add email verification check endpoint
-router.get('/:userId/verification-status', async (req, res) => {
+router.get('/:userId/verification-status', authMiddleware, async (req, res) => {
   try {
     const { userId } = req.params;
     const user = await admin.auth().getUser(userId);
@@ -124,7 +153,7 @@ router.get('/:userId/verification-status', async (req, res) => {
 });
 
 // Resend verification email
-router.post('/:userId/resend-verification', async (req, res) => {
+router.post('/:userId/resend-verification', authMiddleware, async (req, res) => {
   try {
     const { userId } = req.params;
     const user = await admin.auth().getUser(userId);
