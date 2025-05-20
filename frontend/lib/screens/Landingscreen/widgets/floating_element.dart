@@ -34,11 +34,21 @@ class FloatingElement extends StatelessWidget {
             width: size,
             height: size,
             decoration: BoxDecoration(
-              color: color,
+              color: Color.fromRGBO(
+                color.r.toInt(),
+                color.g.toInt(),
+                color.b.toInt(),
+                color.a,
+              ),
               shape: shape,
               boxShadow: [
                 BoxShadow(
-                  color: color.withOpacity(0.6),
+                  color: Color.fromRGBO(
+                    color.r.toInt(),
+                    color.g.toInt(),
+                    color.b.toInt(),
+                    0.6,
+                  ),
                   blurRadius: 20,
                   spreadRadius: -5,
                 ),

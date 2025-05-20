@@ -366,6 +366,15 @@ class _ClientDetailsCardState extends State<ClientDetailsCard> with SingleTicker
     );
   }
 
+  Color _withOpacity(Color color, double opacity) {
+    return Color.fromRGBO(
+      color.r.toInt(), 
+      color.g.toInt(), 
+      color.b.toInt(), 
+      opacity
+    );
+  }
+
   Widget _buildStatCard({
     required String title,
     required String value,
@@ -375,10 +384,10 @@ class _ClientDetailsCardState extends State<ClientDetailsCard> with SingleTicker
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: _withOpacity(color, 0.1),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: color.withOpacity(0.3),
+          color: _withOpacity(color, 0.3),
           width: 1,
         ),
       ),
@@ -497,7 +506,7 @@ class _ClientDetailsCardState extends State<ClientDetailsCard> with SingleTicker
                       fontSize: 12,
                     ),
                   ),
-                  backgroundColor: _getStatusColor(project['status'] ?? 'Active').withOpacity(0.1),
+                  backgroundColor: _withOpacity(_getStatusColor(project['status'] ?? 'Active'), 0.1),
                 ),
                 onTap: () {
                   Navigator.pushNamed(
@@ -592,7 +601,6 @@ class _ClientDetailsCardState extends State<ClientDetailsCard> with SingleTicker
           itemCount: invoices.length,
           itemBuilder: (context, index) {
             final invoice = invoices[index].data() as Map<String, dynamic>;
-            final invoiceId = invoices[index].id;
             
             final invoiceDate = (invoice['invoiceDate'] as Timestamp?)?.toDate();
             final formattedDate = invoiceDate != null 
@@ -630,13 +638,20 @@ class _ClientDetailsCardState extends State<ClientDetailsCard> with SingleTicker
                           fontSize: 12,
                         ),
                       ),
-                      backgroundColor: _getInvoiceStatusColor(invoice['status'] ?? 'Draft').withOpacity(0.1),
+                      backgroundColor: _withOpacity(_getInvoiceStatusColor(invoice['status'] ?? 'Draft'), 0.1),
                     ),
                   ],
                 ),
                 onTap: () {
-                  // TODO: Navigate to invoice detail page when implemented
-                  Navigator.pushReplacementNamed(context, '/invoices');
+                  Navigator.pushNamed(
+                    context, 
+                    '/invoices',
+                    arguments: {
+                      'viewInvoice': true,
+                      'invoiceData': invoice,
+                      'invoiceId': invoices[index].id,
+                    },
+                  );
                 },
               ),
             );

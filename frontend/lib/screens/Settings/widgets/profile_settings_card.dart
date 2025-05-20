@@ -75,7 +75,15 @@ class _ProfileSettingsCardState extends State<ProfileSettingsCard> {
       // Update Firebase Auth email if it changed
       final user = FirebaseAuth.instance.currentUser;
       if (user != null && user.email != _emailController.text) {
-        await user.updateEmail(_emailController.text);
+        // Replace deprecated updateEmail with verifyBeforeUpdateEmail
+        await user.verifyBeforeUpdateEmail(_emailController.text);
+        
+        // Show message to user that verification email was sent
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Verification email sent. Please check your inbox to confirm email change.')),
+          );
+        }
       }
       
       setState(() {
@@ -127,7 +135,13 @@ class _ProfileSettingsCardState extends State<ProfileSettingsCard> {
                   margin: const EdgeInsets.only(bottom: 16),
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
+                    // Convert double values to int with toInt()
+                    color: Color.fromRGBO(
+                      Colors.red.r.toInt(), 
+                      Colors.red.g.toInt(), 
+                      Colors.red.b.toInt(), 
+                      0.1
+                    ),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Row(

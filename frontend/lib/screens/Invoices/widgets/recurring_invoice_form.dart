@@ -237,7 +237,12 @@ class _RecurringInvoiceFormState extends State<RecurringInvoiceForm> {
                   padding: const EdgeInsets.all(8),
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
+                    color: Color.fromRGBO(
+                      Colors.red.r.toInt(),
+                      Colors.red.g.toInt(),
+                      Colors.red.b.toInt(),
+                      0.1,
+                    ),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(

@@ -42,7 +42,6 @@ class ProjectProfitabilityChart extends StatelessWidget {
           final project = projects[index];
           final revenue = project['revenue'] as double;
           final hourlyRate = project['hourlyRate'] as double;
-          final hours = project['hours'] as double;
           
           // Scale hourly rate to revenue scale for the second bar
           final scaledHourlyRate = hourlyRate * (maxRevenue / maxHourlyRate) * 0.5;
@@ -118,15 +117,19 @@ class ProjectProfitabilityChart extends StatelessWidget {
         borderData: FlBorderData(show: false),
         barTouchData: BarTouchData(
           touchTooltipData: BarTouchTooltipData(
-            tooltipBgColor: Colors.blueGrey.withOpacity(0.8),
+            tooltipBgColor: Color.fromRGBO(
+              Colors.blueGrey.r.toInt(), 
+              Colors.blueGrey.g.toInt(), 
+              Colors.blueGrey.b.toInt(), 
+              0.8,
+            ),
             getTooltipItem: (group, groupIndex, rod, rodIndex) {
               final project = projects[group.x];
               final name = project['name'];
-              final hours = project['hours'];
               
               if (rodIndex == 0) {
                 return BarTooltipItem(
-                  '$name\nRevenue: ${moneyFormat.format(project['revenue'])}\nHours: ${hours.toStringAsFixed(1)}',
+                  '$name\nRevenue: ${moneyFormat.format(project['revenue'])}\nHours: ${project['hours'].toStringAsFixed(1)}',
                   const TextStyle(color: Colors.white),
                 );
               } else {

@@ -7,7 +7,16 @@ import '../../../models/invoice_model.dart';
 import '../../../services/firebase_service.dart';
 
 class NewInvoiceForm extends StatefulWidget {
-  const NewInvoiceForm({super.key});
+  final String? invoiceId;
+  final bool isEditing;
+  final VoidCallback? onInvoiceSaved;
+
+  const NewInvoiceForm({
+    super.key, 
+    this.invoiceId,
+    this.isEditing = false,
+    this.onInvoiceSaved,
+  });
 
   @override
   State<NewInvoiceForm> createState() => _NewInvoiceFormState();
@@ -36,7 +45,12 @@ class _NewInvoiceFormState extends State<NewInvoiceForm> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    
+    if (widget.isEditing && widget.invoiceId != null) {
+      _loadInvoiceData();
+    } else {
+      _loadData();
+    }
   }
 
   @override
@@ -94,6 +108,60 @@ class _NewInvoiceFormState extends State<NewInvoiceForm> {
       print('Error in _loadData: $e');
       setState(() {
         _errorMessage = 'Failed to load required data: ${e.toString()}';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadInvoiceData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('User not authenticated');
+
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('invoices')
+          .doc(widget.invoiceId)
+          .get();
+
+      if (!doc.exists) {
+        throw Exception('Invoice not found');
+      }
+
+      final data = doc.data()!;
+      
+      // Populate form fields with existing data
+      _invoiceNumberController.text = data['invoiceNumber'] ?? '';
+      _invoiceDate = (data['invoiceDate'] as Timestamp).toDate();
+      _dueDate = (data['dueDate'] as Timestamp).toDate();
+      
+      // Set selected client
+      _selectedClientId = data['clientId'] as String?;
+      
+      // Set project
+      _selectedProjectId = data['projectId'] as String?;
+      
+      // Load items
+      final items = data['lineItems'] as List<dynamic>? ?? [];
+      _lineItems.clear();
+      _lineItems.addAll(items.map((item) => InvoiceLineItem.fromMap(item as Map<String, dynamic>)).toList());
+      
+      // Set notes
+      _noteController.text = data['note'] as String? ?? '';
+      
+      // Set VAT rate
+      _vatRateController.text = (data['vatRate'] as num?)?.toString() ?? '21';
+      
+    } catch (e) {
+      _errorMessage = 'Error loading invoice: $e';
+      print('Error loading invoice: $e');
+    } finally {
+      setState(() {
         _isLoading = false;
       });
     }
@@ -306,37 +374,59 @@ class _NewInvoiceFormState extends State<NewInvoiceForm> {
         projectId: _selectedProjectId,
       );
       
-      // Save to Firebase
-      String invoiceId;
-      try {
-        print('Saving invoice using Firebase Service...');
-        invoiceId = await _firebaseService.addInvoice(invoice);
-        print('Invoice saved successfully with ID: $invoiceId');
-      } catch (e) {
-        print('Error saving invoice via service: $e');
-        
-        // Fallback to direct Firestore save
+      if (widget.isEditing && widget.invoiceId != null) {
+        // Update existing invoice
         final user = FirebaseAuth.instance.currentUser;
         if (user == null) throw Exception('User not authenticated');
         
-        final docRef = await FirebaseFirestore.instance
+        await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .collection('invoices')
-            .add(invoice.toMap());
+            .doc(widget.invoiceId)
+            .update(invoice.toMap());
             
-        invoiceId = docRef.id;
-        print('Invoice saved directly with ID: $invoiceId');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Invoice updated successfully')),
+          );
+        }
+      } else {
+        // Save to Firebase
+        String invoiceId;
+        try {
+          print('Saving invoice using Firebase Service...');
+          invoiceId = await _firebaseService.addInvoice(invoice);
+          print('Invoice saved successfully with ID: $invoiceId');
+        } catch (e) {
+          print('Error saving invoice via service: $e');
+          
+          // Fallback to direct Firestore save
+          final user = FirebaseAuth.instance.currentUser;
+          if (user == null) throw Exception('User not authenticated');
+          
+          final docRef = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('invoices')
+              .add(invoice.toMap());
+              
+          invoiceId = docRef.id;
+          print('Invoice saved directly with ID: $invoiceId');
+        }
+        
+        if (!mounted) return;
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invoice #${_invoiceNumberController.text} created successfully')),
+        );
       }
       
-      if (!mounted) return;
+      // Call the callback if provided
+      widget.onInvoiceSaved?.call();
       
-      // Close the dialog and show success message
+      // Close the dialog
       Navigator.of(context).pop();
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Invoice #${_invoiceNumberController.text} created successfully')),
-      );
     } catch (e) {
       setState(() {
         _errorMessage = 'Failed to save invoice: ${e.toString()}';
@@ -348,6 +438,8 @@ class _NewInvoiceFormState extends State<NewInvoiceForm> {
 
   @override
   Widget build(BuildContext context) {
+    final title = widget.isEditing ? 'Edit Invoice' : 'Create New Invoice';
+    
     return Dialog(
       child: Container(
         width: 900,
@@ -363,9 +455,9 @@ class _NewInvoiceFormState extends State<NewInvoiceForm> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'New Invoice',
-                      style: TextStyle(
+                    Text(
+                      title,
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -856,7 +948,7 @@ class _NewInvoiceFormState extends State<NewInvoiceForm> {
                                 valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                               ),
                             )
-                          : const Text('Create Invoice'),
+                          : Text(widget.isEditing ? 'Update Invoice' : 'Create Invoice'),
                     ),
                   ],
                 ),

@@ -106,7 +106,12 @@ class _InvoiceFilterDialogState extends State<InvoiceFilterDialog> {
         });
       },
       backgroundColor: Colors.grey[200],
-      selectedColor: const Color(0xFF0B5394).withOpacity(0.2),
+      selectedColor: Color.fromRGBO(
+        const Color(0xFF0B5394).r.toInt(),
+        const Color(0xFF0B5394).g.toInt(),
+        const Color(0xFF0B5394).b.toInt(),
+        0.2,
+      ),
     );
   }
 
@@ -166,7 +171,12 @@ class _InvoiceFilterDialogState extends State<InvoiceFilterDialog> {
         });
       },
       backgroundColor: Colors.grey[200],
-      selectedColor: const Color(0xFF0B5394).withOpacity(0.2),
+      selectedColor: Color.fromRGBO(
+        const Color(0xFF0B5394).r.toInt(),
+        const Color(0xFF0B5394).g.toInt(),
+        const Color(0xFF0B5394).b.toInt(),
+        0.2,
+      ),
     );
   }
 }

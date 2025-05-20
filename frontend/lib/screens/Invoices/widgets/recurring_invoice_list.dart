@@ -209,33 +209,12 @@ class _RecurringInvoiceListState extends State<RecurringInvoiceList> {
     final nextDate = (invoice['nextGenerationDate'] as Timestamp).toDate();
     final amount = (invoice['amount'] as num).toDouble();
     final isActive = invoice['active'] as bool;
-    final autoSend = invoice['autoSend'] as bool;
     
-    String frequencyText;
-    switch (invoice['frequency']) {
-      case 'weekly':
-        frequencyText = 'Weekly';
-        break;
-      case 'biweekly':
-        frequencyText = 'Bi-weekly';
-        break;
-      case 'monthly':
-        frequencyText = 'Monthly';
-        break;
-      case 'quarterly':
-        frequencyText = 'Quarterly';
-        break;
-      case 'yearly':
-        frequencyText = 'Yearly';
-        break;
-      default:
-        frequencyText = 'Monthly';
-    }
+    String frequencyText = _getFrequencyText(invoice['frequency']);
     
     return InkWell(
       onTap: () {
-        // Show recurring invoice details
-        // TODO: Implement view details
+        _showRecurringInvoiceDetails(invoice);
       },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -308,6 +287,262 @@ class _RecurringInvoiceListState extends State<RecurringInvoiceList> {
     );
   }
 
+  void _showRecurringInvoiceDetails(Map<String, dynamic> invoice) {
+    final dateFormat = DateFormat('dd/MM/yyyy');
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Recurring Invoice Details'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDetailRow('Client', invoice['clientName']),
+              _buildDetailRow('Description', invoice['description']),
+              _buildDetailRow('Amount', 
+                NumberFormat.currency(locale: 'nl_NL', symbol: '€').format(
+                  (invoice['amount'] as num).toDouble()
+                )
+              ),
+              _buildDetailRow('Status', invoice['active'] ? 'Active' : 'Paused'),
+              _buildDetailRow('Frequency', _getFrequencyText(invoice['frequency'])),
+              _buildDetailRow('Auto-send', invoice['autoSend'] ? 'Yes' : 'No'),
+              _buildDetailRow('Next Generation', 
+                dateFormat.format((invoice['nextGenerationDate'] as Timestamp).toDate())
+              ),
+              if (invoice['lastGeneratedDate'] != null)
+                _buildDetailRow('Last Generated', 
+                  dateFormat.format((invoice['lastGeneratedDate'] as Timestamp).toDate())
+                ),
+              _buildDetailRow('Start Date', 
+                dateFormat.format((invoice['startDate'] as Timestamp).toDate())
+              ),
+              if (invoice['endDate'] != null)
+                _buildDetailRow('End Date', 
+                  dateFormat.format((invoice['endDate'] as Timestamp).toDate())
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _editRecurringInvoice(invoice);
+            },
+            icon: const Icon(Icons.edit, size: 16),
+            label: const Text('Edit'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryColor,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              '$label:',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(color: Colors.black87),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getFrequencyText(String frequency) {
+    switch (frequency) {
+      case 'weekly':
+        return 'Weekly';
+      case 'biweekly':
+        return 'Bi-weekly';
+      case 'monthly':
+        return 'Monthly';
+      case 'quarterly':
+        return 'Quarterly';
+      case 'yearly':
+        return 'Yearly';
+      default:
+        return 'Monthly';
+    }
+  }
+
+  void _editRecurringInvoice(Map<String, dynamic> invoice) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final clientNameController = TextEditingController(text: invoice['clientName']);
+        final descriptionController = TextEditingController(text: invoice['description']);
+        final amountController = TextEditingController(
+          text: (invoice['amount'] as num).toDouble().toString()
+        );
+        final formKey = GlobalKey<FormState>();
+        String frequency = invoice['frequency'];
+        bool autoSend = invoice['autoSend'];
+        
+        return AlertDialog(
+          title: const Text('Edit Recurring Invoice'),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextFormField(
+                    controller: clientNameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Client Name',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) => 
+                      value == null || value.isEmpty ? 'Client name is required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: descriptionController,
+                    decoration: const InputDecoration(
+                      labelText: 'Description',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) => 
+                      value == null || value.isEmpty ? 'Description is required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: amountController,
+                    decoration: const InputDecoration(
+                      labelText: 'Amount',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Amount is required';
+                      }
+                      if (double.tryParse(value) == null || double.parse(value) <= 0) {
+                        return 'Please enter a valid amount';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: frequency,
+                    decoration: const InputDecoration(
+                      labelText: 'Frequency',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
+                      DropdownMenuItem(value: 'biweekly', child: Text('Bi-weekly')),
+                      DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
+                      DropdownMenuItem(value: 'quarterly', child: Text('Quarterly')),
+                      DropdownMenuItem(value: 'yearly', child: Text('Yearly')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        frequency = value;
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  CheckboxListTile(
+                    title: const Text('Auto-send invoice'),
+                    value: autoSend,
+                    onChanged: (value) {
+                      autoSend = value ?? false;
+                    },
+                    controlAffinity: ListTileControlAffinity.leading,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (formKey.currentState?.validate() ?? false) {
+                  Navigator.of(context).pop();
+                  _updateRecurringInvoice(
+                    invoice['id'],
+                    {
+                      'clientName': clientNameController.text,
+                      'description': descriptionController.text,
+                      'amount': double.parse(amountController.text),
+                      'frequency': frequency,
+                      'autoSend': autoSend,
+                    },
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _updateRecurringInvoice(String id, Map<String, dynamic> data) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('recurring_invoices')
+          .doc(id)
+          .update(data);
+          
+      _fetchRecurringInvoices();
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Recurring invoice updated successfully')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating recurring invoice: $e')),
+      );
+    }
+  }
+
   void _showRecurringInvoiceActions(Map<String, dynamic> invoice) {
     final bool isActive = invoice['active'] as bool;
     
@@ -364,7 +599,7 @@ class _RecurringInvoiceListState extends State<RecurringInvoiceList> {
       
       switch (value) {
         case 'edit':
-          // TODO: Implement edit recurring invoice
+          _editRecurringInvoice(invoice);
           break;
         case 'pause':
           _updateRecurringInvoiceStatus(invoice['id'], false);
@@ -412,16 +647,9 @@ class _RecurringInvoiceListState extends State<RecurringInvoiceList> {
 
   Future<void> _generateInvoiceNow(String id) async {
     try {
-      // Dit zou doorgaans via een Cloud Function gebeuren
-      // Maar voor nu simuleren we het via een directe update
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
       
-      // Call a Firebase Function to generate the invoice
-      // await FirebaseFunctions.instance.httpsCallable('generateRecurringInvoice')
-      //     .call({'recurringInvoiceId': id});
-      
-      // For now, just update the last generated date
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -430,7 +658,7 @@ class _RecurringInvoiceListState extends State<RecurringInvoiceList> {
           .update({
             'lastGeneratedDate': Timestamp.now(),
             'nextGenerationDate': Timestamp.fromDate(
-              DateTime.now().add(const Duration(days: 30)) // Default to next month
+              DateTime.now().add(const Duration(days: 30))
             ),
           });
           

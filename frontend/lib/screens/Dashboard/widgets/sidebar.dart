@@ -91,7 +91,12 @@ class DashboardSidebar extends StatelessWidget {
           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
         ),
       ),
-      selectedTileColor: Colors.blue.withOpacity(0.1),
+      selectedTileColor: Color.fromRGBO(
+        Colors.blue.r.toInt(),
+        Colors.blue.g.toInt(),
+        Colors.blue.b.toInt(),
+        0.1
+      ),
       selected: isSelected,
       onTap: () => onItemSelected(index),
     );

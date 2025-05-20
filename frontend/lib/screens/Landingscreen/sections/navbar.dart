@@ -1,194 +1,224 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class NavBar extends StatelessWidget {
   final Color primaryColor;
   final VoidCallback onGetStarted;
 
   const NavBar({
-    super.key, 
+    Key? key,
     required this.primaryColor,
     required this.onGetStarted,
-  });
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 800;
+    // Basisstijlen definiëren
+    final titleStyle = GoogleFonts.manrope(
+      fontSize: 24,
+      fontWeight: FontWeight.bold,
+      color: primaryColor,
+    );
     
+    final buttonStyle = ElevatedButton.styleFrom(
+      backgroundColor: primaryColor,
+      foregroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+    );
+
     return Container(
-      width: double.infinity,
-      height: 80,
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
       decoration: BoxDecoration(
-        color: const Color(0xFFd5dedb),
+        color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
-            spreadRadius: 1,
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _buildLogo(context),
-            if (isSmallScreen)
-              IconButton(
-                icon: const Icon(Icons.menu),
-                onPressed: () {
-                  _showMobileMenu(context);
-                },
-              )
-            else
-              Flexible(
-                child: _buildNavItems(context),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLogo(BuildContext context) {
-    return InkWell(
-      onTap: () => Navigator.pushNamed(context, '/'),
-      child: Row(
-        children: [
-          Image.asset(
-            'lib/utils/images/LogoZonderTitel.png',
-            height: 40,
-            fit: BoxFit.contain,
-          ),
-          const SizedBox(width: 12),
-          Text(
-            'Time2Bill',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: primaryColor,
+            color: Color.fromRGBO(
+              Colors.black.r.toInt(),
+              Colors.black.g.toInt(),
+              Colors.black.b.toInt(),
+              0.05,
             ),
+            offset: const Offset(0, 2),
+            blurRadius: 4,
           ),
         ],
       ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isDesktop = constraints.maxWidth > 800;
+          
+          // We verwijderen de Column en het grote logo hier
+          // En keren terug naar de eenvoudigere Row structuur
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Logo en titel row - nu klikbaar naar home
+              InkWell(
+                onTap: () => Navigator.pushReplacementNamed(context, '/'),
+                child: Row(
+                  children: [
+                    Image.asset(
+                      'lib/utils/images/LogoZonderTitel.png',
+                      height: 36,
+                      fit: BoxFit.contain,
+                    ),
+                    const SizedBox(width: 12),
+                    Text('Time2Bill', style: titleStyle),
+                  ],
+                ),
+              ),
+              
+              // Navigatie-items
+              if (isDesktop)
+                Row(
+                  children: [
+                    _buildNavItems(context),
+                    const SizedBox(width: 16),
+                    ElevatedButton(
+                      onPressed: onGetStarted,
+                      style: buttonStyle,
+                      child: Text(
+                        'Get Started', 
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                IconButton(
+                  icon: const Icon(Icons.menu),
+                  onPressed: () => _showMobileMenu(context),
+                ),
+            ],
+          );
+        }
+      ),
     );
   }
-
+  
+  /// Helper methode om navigatie-items te bouwen
   Widget _buildNavItems(BuildContext context) {
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        Flexible(child: _buildNavLink('Features', context)),
-        Flexible(child: _buildNavLink('How it Works', context)),
-        Flexible(child: _buildNavLink('About Us', context)),
-        Flexible(child: _buildNavLink('Pricing', context)),
-        const SizedBox(width: 24),
-        Flexible(
-          child: TextButton(
-            onPressed: () {
-              Navigator.pushNamed(context, '/login');
-            },
-            style: TextButton.styleFrom(
-              foregroundColor: primaryColor,
-            ),
-            child: const Text('Login'),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Flexible(child: _buildGetStartedButton(context)),
+        NavBarItem(title: 'Features', onTap: () => Navigator.pushNamed(context, '/features')),
+        NavBarItem(title: 'How It Works', onTap: () => Navigator.pushNamed(context, '/how-it-works')),
+        NavBarItem(title: 'About', onTap: () => Navigator.pushNamed(context, '/about')),
+        NavBarItem(title: 'Login', onTap: () => Navigator.pushNamed(context, '/login')),
       ],
     );
   }
-
+  
+  /// Toont het mobile menu wanneer op de hamburger icon wordt geklikt
   void _showMobileMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              title: const Text('Features'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushNamed(context, '/features');
-              },
-            ),
-            ListTile(
-              title: const Text('How it Works'),
-              onTap: () => Navigator.pop(context),
-            ),
-            ListTile(
-              title: const Text('About Us'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushNamed(context, '/about');
-              },
-            ),
-            ListTile(
-              title: const Text('Pricing'),
-              onTap: () => Navigator.pop(context),
-            ),
-            ListTile(
-              title: const Text('Login'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushNamed(context, '/login');
-              },
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: ElevatedButton(
-                onPressed: () {
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: const Text('Features'),
+                onTap: () {
                   Navigator.pop(context);
-                  Navigator.pushNamed(context, '/register');
+                  Navigator.pushNamed(context, '/features');
                 },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryColor,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 45),
-                ),
-                child: const Text('Get Started'),
               ),
-            ),
-          ],
-        ),
-      ),
+              ListTile(
+                title: const Text('How It Works'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(context, '/how-it-works');
+                },
+              ),
+              ListTile(
+                title: const Text('About'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(context, '/about');
+                },
+              ),
+              ListTile(
+                title: const Text('Login'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(context, '/login');
+                },
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    onGetStarted();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    minimumSize: const Size(double.infinity, 48),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Get Started',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
+}
 
-  Widget _buildNavLink(String text, BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4.0),
-      child: TextButton(
-        onPressed: () {
-          if (text == 'Features') {
-            Navigator.pushNamed(context, '/features');
-          } else if (text == 'About Us') {
-            Navigator.pushNamed(context, '/about');
-          }
-        },
+class NavBarItem extends StatelessWidget {
+  final String title;
+  final VoidCallback onTap;
+
+  const NavBarItem({
+    Key? key,
+    required this.title,
+    required this.onTap,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      hoverColor: Color.fromRGBO(
+        Colors.grey.r.toInt(),
+        Colors.grey.g.toInt(),
+        Colors.grey.b.toInt(),
+        0.1,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Text(
-          text, 
-          style: TextStyle(color: primaryColor),
-          overflow: TextOverflow.ellipsis,
+          title,
+          style: GoogleFonts.inter(
+            color: Colors.black87,
+            fontWeight: FontWeight.w500,
+            fontSize: 15,
+          ),
         ),
       ),
-    );
-  }
-
-  Widget _buildGetStartedButton(BuildContext context) {
-    return ElevatedButton(
-      onPressed: () => Navigator.pushNamed(context, '/register'),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: primaryColor,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      ),
-      child: const Text('Get Started'),
     );
   }
 }

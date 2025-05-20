@@ -14,7 +14,6 @@ class _ProfilePageState extends State<ProfilePage> {
   int _selectedIndex = 7; // Profile index in sidebar
   final Color primaryColor = const Color(0xFF0B5394);
   bool _isLoading = true;
-  Map<String, dynamic> _userData = {};
   final _formKey = GlobalKey<FormState>();
   
   // Controllers
@@ -62,7 +61,6 @@ class _ProfilePageState extends State<ProfilePage> {
       if (userDoc.exists) {
         final userData = userDoc.data() ?? {};
         setState(() {
-          _userData = userData;
           _nameController.text = userData['fullName'] ?? '';
           _emailController.text = user.email ?? '';
           

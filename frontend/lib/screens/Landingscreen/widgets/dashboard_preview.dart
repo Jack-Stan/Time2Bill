@@ -23,13 +23,23 @@ class DashboardPreview extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Color.fromRGBO(
+                Colors.black.r.toInt(),
+                Colors.black.g.toInt(),
+                Colors.black.b.toInt(),
+                0.1,
+              ),
               blurRadius: 30,
               spreadRadius: -5,
               offset: const Offset(0, 15),
             ),
             BoxShadow(
-              color: primaryColor.withOpacity(0.08),
+              color: Color.fromRGBO(
+                primaryColor.r.toInt(),
+                primaryColor.g.toInt(),
+                primaryColor.b.toInt(),
+                0.08,
+              ),
               blurRadius: 60,
               spreadRadius: -10,
               offset: const Offset(0, 25),
@@ -79,7 +89,12 @@ class DashboardPreview extends StatelessWidget {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Color.fromRGBO(
+              Colors.black.r.toInt(),
+              Colors.black.g.toInt(),
+              Colors.black.b.toInt(),
+              0.05,
+            ),
             blurRadius: 20,
             spreadRadius: -5,
           ),
@@ -102,7 +117,12 @@ class DashboardPreview extends StatelessWidget {
             height: 40,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: primaryColor.withOpacity(0.1),
+              color: Color.fromRGBO(
+                primaryColor.r.toInt(),
+                primaryColor.g.toInt(),
+                primaryColor.b.toInt(),
+                0.1,
+              ),
             ),
             child: Center(
               child: Icon(
@@ -207,7 +227,12 @@ class DashboardPreview extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: color.withOpacity(0.06),
+              color: Color.fromRGBO(
+                color.r.toInt(),
+                color.g.toInt(),
+                color.b.toInt(),
+                0.06,
+              ),
               blurRadius: 12,
               spreadRadius: 0,
               offset: const Offset(0, 4),
@@ -222,7 +247,12 @@ class DashboardPreview extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
+                    color: Color.fromRGBO(
+                      color.r.toInt(),
+                      color.g.toInt(),
+                      color.b.toInt(),
+                      0.1,
+                    ),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(icon, size: 16, color: color),
@@ -349,7 +379,12 @@ class DashboardPreview extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Color.fromRGBO(
+              Colors.black.r.toInt(),
+              Colors.black.g.toInt(),
+              Colors.black.b.toInt(),
+              0.03,
+            ),
             blurRadius: 12,
             spreadRadius: 0,
             offset: const Offset(0, 2),
@@ -471,7 +506,12 @@ class DashboardPreview extends StatelessWidget {
             ),
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(0.06),
+                color: Color.fromRGBO(
+                  color.r.toInt(),
+                  color.g.toInt(),
+                  color.b.toInt(),
+                  0.06,
+                ),
                 blurRadius: 12,
                 spreadRadius: 0,
                 offset: const Offset(0, 4),

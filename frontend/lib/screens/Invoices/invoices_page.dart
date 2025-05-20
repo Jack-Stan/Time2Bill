@@ -776,8 +776,7 @@ class _InvoicesPageState extends State<InvoicesPage> with SingleTickerProviderSt
     return InkWell(
       onTap: () {
         // Navigate to invoice details page
-        // TODO: Implement navigation to invoice detail
-        print('View invoice: ${invoice['id']}');
+        _showInvoiceDetails(invoice);
       },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -881,7 +880,8 @@ class _InvoicesPageState extends State<InvoicesPage> with SingleTickerProviderSt
               Text('Edit'),
             ],
           ),
-        ),        const PopupMenuItem(
+        ),
+        const PopupMenuItem(
           value: 'download',
           child: Row(
             children: [
@@ -929,15 +929,6 @@ class _InvoicesPageState extends State<InvoicesPage> with SingleTickerProviderSt
               SizedBox(width: 8),
               Text('Delete', style: TextStyle(color: Colors.red)),
             ],
-          ),        ),
-        const PopupMenuItem(
-          value: 'send_peppol',
-          child: Row(
-            children: [
-              Icon(Icons.send, size: 18),
-              SizedBox(width: 8),
-              Text('Send via Peppol'),
-            ],
           ),
         ),
       ],
@@ -947,10 +938,10 @@ class _InvoicesPageState extends State<InvoicesPage> with SingleTickerProviderSt
       
       switch (value) {
         case 'view':
-          // TODO: Navigate to invoice detail page
+          _showInvoiceDetails(invoice);
           break;
         case 'edit':
-          // TODO: Open edit invoice form
+          _showEditInvoiceForm(invoice);
           break;
         case 'download':
           _downloadInvoicePdf(invoice['id']);
@@ -969,6 +960,137 @@ class _InvoicesPageState extends State<InvoicesPage> with SingleTickerProviderSt
           break;
       }
     });
+  }
+
+  // New method to show invoice details
+  void _showInvoiceDetails(Map<String, dynamic> invoice) {
+    final dateFormat = DateFormat('dd/MM/yyyy');
+    final moneyFormat = NumberFormat.currency(locale: 'nl_NL', symbol: '€');
+    
+    final invoiceDate = (invoice['invoiceDate'] as Timestamp).toDate();
+    final dueDate = (invoice['dueDate'] as Timestamp).toDate();
+    final total = (invoice['total'] as num).toDouble();
+    final status = invoice['status'] as String;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Invoice ${invoice['invoiceNumber']}'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDetailRow('Client', invoice['clientName']),
+              _buildDetailRow('Invoice Date', dateFormat.format(invoiceDate)),
+              _buildDetailRow('Due Date', dateFormat.format(dueDate)),
+              _buildDetailRow('Amount', moneyFormat.format(total)),
+              _buildDetailRow('Status', status.substring(0, 1).toUpperCase() + status.substring(1)),
+              const SizedBox(height: 16),
+              const Text(
+                'Actions',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _downloadInvoicePdf(invoice['id']);
+                    },
+                    icon: const Icon(Icons.download, size: 16),
+                    label: const Text('Download PDF'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _markInvoiceAsPaid(invoice['id']);
+                    },
+                    icon: const Icon(Icons.check_circle, size: 16),
+                    label: const Text('Mark as Paid'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _showEditInvoiceForm(invoice);
+                    },
+                    icon: const Icon(Icons.edit, size: 16),
+                    label: const Text('Edit'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              '$label:',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(color: Colors.black87),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // New method to show the edit invoice form
+  void _showEditInvoiceForm(Map<String, dynamic> invoice) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.8,
+          height: MediaQuery.of(context).size.height * 0.9,
+          padding: const EdgeInsets.all(16),
+          child: NewInvoiceForm(
+            invoiceId: invoice['id'],
+            isEditing: true,
+            onInvoiceSaved: _fetchInvoices,
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _markInvoiceAsPaid(String invoiceId) async {

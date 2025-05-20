@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
+import 'overflow_safe_widget.dart';
 
 class FirebaseConnectivityMonitor extends StatefulWidget {
   final Widget child;
@@ -16,25 +17,48 @@ class FirebaseConnectivityMonitor extends StatefulWidget {
   State<FirebaseConnectivityMonitor> createState() => _FirebaseConnectivityMonitorState();
 }
 
-class _FirebaseConnectivityMonitorState extends State<FirebaseConnectivityMonitor> {
+class _FirebaseConnectivityMonitorState extends State<FirebaseConnectivityMonitor> with WidgetsBindingObserver {
   bool _isConnected = true;
-  late Timer _checkTimer;
-  String? _errorMessage;
+  Timer? _checkTimer;
+  bool _isChecking = false;
 
   @override
   void initState() {
     super.initState();
-    _checkConnectivity();
-    _checkTimer = Timer.periodic(widget.checkInterval, (_) => _checkConnectivity());
+    WidgetsBinding.instance.addObserver(this);
+    
+    // Delay the initial check to avoid conflicts during app startup
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        _checkConnectivity();
+      }
+    });
+    
+    _checkTimer = Timer.periodic(widget.checkInterval, (_) {
+      if (!_isChecking && mounted) {
+        _checkConnectivity();
+      }
+    });
   }
 
   @override
   void dispose() {
-    _checkTimer.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _checkTimer?.cancel();
     super.dispose();
+  }
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkConnectivity();
+    }
   }
 
   Future<void> _checkConnectivity() async {
+    if (_isChecking) return;
+    
+    _isChecking = true;
     try {
       await FirebaseFirestore.instance.collection('system').doc('status').get()
           .timeout(const Duration(seconds: 10));
@@ -42,15 +66,15 @@ class _FirebaseConnectivityMonitorState extends State<FirebaseConnectivityMonito
       if (!mounted) return;
       setState(() {
         _isConnected = true;
-        _errorMessage = null;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isConnected = false;
-        _errorMessage = e.toString();
       });
       print('Firebase connectivity check failed: $e');
+    } finally {
+      _isChecking = false;
     }
   }
 
@@ -60,38 +84,52 @@ class _FirebaseConnectivityMonitorState extends State<FirebaseConnectivityMonito
       return widget.child;
     }
 
-    return Stack(
-      children: [
-        widget.child,
-        Positioned(
-          bottom: 0,
-          left: 0,
-          right: 0,
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-            color: Colors.red,
-            child: Row(
-              children: [
-                const Icon(Icons.cloud_off, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Connection to server lost. Your changes may not be saved.',
-                    style: const TextStyle(color: Colors.white),
+    // Using SafeArea to ensure proper boundaries
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        fit: StackFit.passthrough,
+        children: [
+          widget.child,
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: true,
+              child: Material(
+                color: Colors.red,
+                elevation: 4,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                  child: SafeRow(
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      const Icon(Icons.cloud_off, color: Colors.white),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Connection to server lost. Your changes may not be saved.',
+                          style: const TextStyle(color: Colors.white),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 2,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _isChecking ? null : _checkConnectivity,
+                        child: const Text(
+                          'Retry',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                TextButton(
-                  onPressed: _checkConnectivity,
-                  child: const Text(
-                    'Retry',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

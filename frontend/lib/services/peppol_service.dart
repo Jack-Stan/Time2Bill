@@ -333,7 +333,7 @@ class PeppolService {
       'message': 'Peppol sending functionality requires integration with an Access Point provider',
       'recipientId': recipientPeppolId,
       'senderId': senderPeppolId,
-      'documentId': ublDocument.rootElement.findElements('cbc:ID').first.text,
+      'documentId': ublDocument.rootElement.findElements('cbc:ID').first.value,
     };
   }
   
@@ -343,7 +343,23 @@ class PeppolService {
     // In a real implementation, you would call the VIES API
     // or use a service like https://ec.europa.eu/taxation_customs/vies/
     
-    // This is just a placeholder
-    return true;
+    // Parse the VAT number format (e.g., remove country code if needed)
+    final cleanVatNumber = vatNumber.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+    
+    try {
+      // This would be where you'd call an actual VAT validation service
+      // For now, we'll just do basic format validation
+      final isValidFormat = RegExp(r'^[A-Z]{2}[0-9A-Z]+$').hasMatch(cleanVatNumber);
+      
+      // In a real implementation, you would also:
+      // 1. Call the VIES API or a VAT validation service
+      // 2. Parse the response to determine validity
+      // 3. Handle any errors from the service
+      
+      return isValidFormat;
+    } catch (e) {
+      print('Error validating VAT number: $e');
+      return false;
+    }
   }
 }

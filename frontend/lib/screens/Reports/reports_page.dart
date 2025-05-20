@@ -28,7 +28,6 @@ class _ReportsPageState extends State<ReportsPage> {
   
   // Report data
   Map<String, double> _projectTimeData = {};
-  Map<String, double> _clientTimeData = {};
   List<Map<String, dynamic>> _revenueData = [];
   List<Map<String, dynamic>> _projectProfitabilityData = [];
   List<Map<String, dynamic>> _clientRevenueData = [];
@@ -259,7 +258,6 @@ class _ReportsPageState extends State<ReportsPage> {
       // Update state with all the data
       setState(() {
         _projectTimeData = projectTimeData;
-        _clientTimeData = clientTimeData;
         _revenueData = revenueData;
         _projectProfitabilityData = projectProfitabilityData;
         _clientRevenueData = clientRevenueData;

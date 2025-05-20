@@ -4,10 +4,12 @@ import 'package:intl/intl.dart';
 
 class RevenueChart extends StatelessWidget {
   final List<Map<String, dynamic>> data;
+  final Color primaryColor;
   
   const RevenueChart({
     super.key, 
     required this.data,
+    this.primaryColor = Colors.green,
   });
 
   @override
@@ -111,7 +113,12 @@ class RevenueChart extends StatelessWidget {
             dotData: FlDotData(show: false),
             belowBarData: BarAreaData(
               show: true,
-              color: Colors.green.withOpacity(0.1),
+              color: Color.fromRGBO(
+                Colors.green.r.toInt(),
+                Colors.green.g.toInt(),
+                Colors.green.b.toInt(),
+                0.05,
+              ),
             ),
           ),
           // Hours line
@@ -131,13 +138,13 @@ class RevenueChart extends StatelessWidget {
             dotData: FlDotData(show: false),
             belowBarData: BarAreaData(
               show: true,
-              color: Colors.blue.withOpacity(0.1),
+              color: Color.fromRGBO(Colors.grey.r.toInt(), Colors.grey.g.toInt(), Colors.grey.b.toInt(), 0.1),
             ),
           ),
         ],
         lineTouchData: LineTouchData(
           touchTooltipData: LineTouchTooltipData(
-            tooltipBgColor: Colors.blueGrey.withOpacity(0.8),
+            tooltipBgColor: Color.fromRGBO(Colors.blueGrey.r.toInt(), Colors.blueGrey.g.toInt(), Colors.blueGrey.b.toInt(), 0.8),
             getTooltipItems: (List<LineBarSpot> touchedSpots) {
               return touchedSpots.map((spot) {
                 final index = spot.x.toInt();

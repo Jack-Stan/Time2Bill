@@ -23,13 +23,23 @@ class InvoicePreview extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Color.fromRGBO(
+                Colors.black.r.toInt(),
+                Colors.black.g.toInt(),
+                Colors.black.b.toInt(),
+                0.1,
+              ),
               blurRadius: 30,
               spreadRadius: -5,
               offset: const Offset(0, 15),
             ),
             BoxShadow(
-              color: primaryColor.withOpacity(0.08),
+              color: Color.fromRGBO(
+                primaryColor.r.toInt(),
+                primaryColor.g.toInt(),
+                primaryColor.b.toInt(),
+                0.08,
+              ),
               blurRadius: 60,
               spreadRadius: -10,
               offset: const Offset(0, 25),
@@ -77,7 +87,12 @@ class InvoicePreview extends StatelessWidget {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Color.fromRGBO(
+              Colors.black.r.toInt(),
+              Colors.black.g.toInt(),
+              Colors.black.b.toInt(),
+              0.05,
+            ),
             blurRadius: 20,
             spreadRadius: -5,
           ),

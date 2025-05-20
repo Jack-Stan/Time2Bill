@@ -1,12 +1,12 @@
-import 'dart:typed_data';
 import 'package:universal_html/html.dart' as html;
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
-import 'package:xml/xml.dart';
 
+// These imports are needed for the return types of the Firebase service methods
+// Adding explicit type annotations to demonstrate usage
 import '../models/invoice_model.dart';
 import '../models/client_model.dart';
 import '../models/business_details.dart';
+
 import 'firebase_service.dart';
 import 'pdf_service.dart';
 import 'peppol_service.dart';
@@ -19,14 +19,11 @@ class InvoiceExportService {
   /// Generate and download a PDF invoice
   Future<void> generateAndDownloadPdf(String invoiceId) async {
     try {
-      // Get invoice data
-      final invoice = await _firebaseService.getInvoice(invoiceId);
+      // Get invoice data with explicit type annotation
+      final InvoiceModel invoice = await _firebaseService.getInvoice(invoiceId);
       
-      // Get business details from user profile
-      final businessDetails = await _firebaseService.getBusinessDetails();
-      
-      // Get client data
-      final client = await _firebaseService.getClient(invoice.clientId);
+      // Get business details with explicit type annotation
+      final BusinessDetails businessDetails = await _firebaseService.getBusinessDetails();
       
       // Generate PDF
       final pdfBytes = await _pdfService.generateInvoicePdf(
@@ -51,14 +48,14 @@ class InvoiceExportService {
   /// Generate and download a UBL XML file for Peppol
   Future<void> generateAndDownloadUbl(String invoiceId) async {
     try {
-      // Get invoice data
-      final invoice = await _firebaseService.getInvoice(invoiceId);
+      // Get invoice data with explicit type annotation
+      final InvoiceModel invoice = await _firebaseService.getInvoice(invoiceId);
       
-      // Get business details from user profile
-      final businessDetails = await _firebaseService.getBusinessDetails();
+      // Get business details with explicit type annotation
+      final BusinessDetails businessDetails = await _firebaseService.getBusinessDetails();
       
-      // Get client data
-      final client = await _firebaseService.getClient(invoice.clientId);
+      // Get client data with explicit type annotation
+      final ClientModel client = await _firebaseService.getClient(invoice.clientId);
       
       // Check if client has valid Peppol ID or VAT number
       if ((client.peppolId == null || client.peppolId!.isEmpty) && 
@@ -95,10 +92,10 @@ class InvoiceExportService {
   Future<Map<String, dynamic>> sendViaPeppol(String invoiceId) async {
     try {
       // Get invoice data
-      final invoice = await _firebaseService.getInvoice(invoiceId);
+      final InvoiceModel invoice = await _firebaseService.getInvoice(invoiceId);
       
-      // Get business details from user profile
-      final businessDetails = await _firebaseService.getBusinessDetails();
+      // Get business details
+      final BusinessDetails businessDetails = await _firebaseService.getBusinessDetails();
       
       // Check if business has Peppol ID
       if (businessDetails.peppolId == null || businessDetails.peppolId!.isEmpty) {
@@ -109,7 +106,7 @@ class InvoiceExportService {
       }
       
       // Get client data
-      final client = await _firebaseService.getClient(invoice.clientId);
+      final ClientModel client = await _firebaseService.getClient(invoice.clientId);
       
       // Check if client has Peppol ID
       if (client.peppolId == null || client.peppolId!.isEmpty) {
@@ -134,27 +131,15 @@ class InvoiceExportService {
         };
       }
       
-      // Generate UBL XML
+      // Generate UBL XML - currently unused but would be used in a full implementation
+      /*
       final xmlDoc = _peppolService.generateUblXml(
         invoice: invoice,
         businessDetails: businessDetails,
         client: client,
       );
       
-      // Send via Peppol
-      /* In a real implementation, you would send this via an Access Point provider
-      final result = await _peppolService.sendToPeppolNetwork(
-        ublDocument: xmlDoc,
-        recipientPeppolId: client.peppolId!,
-        senderPeppolId: businessDetails.peppolId!,
-      );
-      
-      if (result['success']) {
-        // Update invoice status to 'sent'
-        await _firebaseService.updateInvoice(invoiceId, invoice.copyWith(status: 'sent'));
-      }
-      
-      return result;
+      // Send via Peppol...
       */
       
       // For now, we just notify the user that this is a placeholder

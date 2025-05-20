@@ -308,7 +308,8 @@ class FirebaseService {
                 .get();
                 
             if (clientDoc.exists) {
-              final clientData = clientDoc.data() as Map<String, dynamic>?;
+              // Remove unnecessary cast
+              final clientData = clientDoc.data();
               clientName = clientData?['name'] as String?;
             }
           } catch (e) {

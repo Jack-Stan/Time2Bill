@@ -73,7 +73,12 @@ class ProjectCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _getStatusColor().withOpacity(0.1),
+                    color: Color.fromRGBO(
+                      _getStatusColor().r.toInt(),
+                      _getStatusColor().g.toInt(),
+                      _getStatusColor().b.toInt(),
+                      0.1,
+                    ),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: _getStatusColor(),
@@ -113,7 +118,12 @@ class ProjectCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.2),
+                      color: Color.fromRGBO(
+                        Colors.grey.r.toInt(),
+                        Colors.grey.g.toInt(),
+                        Colors.grey.b.toInt(),
+                        0.05,
+                      ),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: Colors.orange,

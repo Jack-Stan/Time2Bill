@@ -859,7 +859,12 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.green.shade50,
+        color: Color.fromRGBO(
+          Colors.red.r.toInt(),
+          Colors.red.g.toInt(),
+          Colors.red.b.toInt(),
+          0.1,
+        ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.green.shade200),
       ),
@@ -1163,7 +1168,12 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: Color.fromRGBO(
+              color.r.toInt(),
+              color.g.toInt(),
+              color.b.toInt(),
+              0.1,
+            ),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(

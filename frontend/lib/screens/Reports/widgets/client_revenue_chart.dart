@@ -90,7 +90,7 @@ class ClientRevenueChart extends StatelessWidget {
         borderData: FlBorderData(show: false),
         barTouchData: BarTouchData(
           touchTooltipData: BarTouchTooltipData(
-            tooltipBgColor: Colors.blueGrey.withOpacity(0.8),
+            tooltipBgColor: Color.fromRGBO(Colors.blueGrey.r.toInt(), Colors.blueGrey.g.toInt(), Colors.blueGrey.b.toInt(), 0.8),
             getTooltipItem: (group, groupIndex, rod, rodIndex) {
               final client = clients[group.x];
               final name = client['name'];

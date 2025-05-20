@@ -34,7 +34,6 @@ class _RegisterPageWidgetState extends State<RegisterPageWidget> {
   bool _isLoading = false;
   String? _errorMessage;
   RegistrationStep _currentStep = RegistrationStep.personalInfo;
-  bool _emailVerified = false;
 
   @override
   void initState() {
@@ -52,11 +51,13 @@ class _RegisterPageWidgetState extends State<RegisterPageWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        // Prevent going back if resuming registration
-        final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-        return args?['resumeStep'] == null;
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final isResuming = args?['resumeStep'] != null;
+
+    return PopScope(
+      canPop: !isResuming,
+      onPopInvokedWithResult: (didPop, dynamic result) {
+        // Handle pop if needed
       },
       child: Scaffold(
         body: SingleChildScrollView(
@@ -119,7 +120,7 @@ class _RegisterPageWidgetState extends State<RegisterPageWidget> {
 
   Widget _buildErrorMessage() {
     if (_errorMessage == null) return const SizedBox.shrink();
-    
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -322,7 +323,7 @@ class _RegisterPageWidgetState extends State<RegisterPageWidget> {
 
   Step _buildCompleteStep() {
     final allStepsValid = _validateAllRequiredSteps();
-    
+
     return Step(
       title: const Text('Complete'),
       content: Column(
@@ -342,9 +343,9 @@ class _RegisterPageWidgetState extends State<RegisterPageWidget> {
             ),
           const Text('Registration Complete!'),
           ElevatedButton(
-            onPressed: allStepsValid 
-              ? () => Navigator.pushReplacementNamed(context, '/dashboard')
-              : null,
+            onPressed: allStepsValid
+                ? () => Navigator.pushReplacementNamed(context, '/dashboard')
+                : null,
             child: const Text('Start Using Time2Bill'),
           ),
         ],
@@ -500,21 +501,22 @@ class _RegisterPageWidgetState extends State<RegisterPageWidget> {
         defaultVatRate: 21,
         paymentTerms: 30,
         peppolId: _peppolIdController.text.isEmpty ? null : _peppolIdController.text, // Make optional
-        phone: '', 
+        phone: '',
         website: '',
       ),
     );
   }
 
   bool _validateAllRequiredSteps() {
-    return FirebaseAuth.instance.currentUser?.emailVerified ?? false &&
-           _validateBusinessDetailsStep();
+    final isEmailVerified = FirebaseAuth.instance.currentUser?.emailVerified ?? false;
+    final isBusinessValid = _validateBusinessDetailsStep();
+    return isEmailVerified && isBusinessValid;
   }
 
   bool _validateBusinessDetailsStep() {
     return _companyNameController.text.isNotEmpty &&
-           _vatNumberController.text.isNotEmpty &&
-           _addressController.text.isNotEmpty;
+        _vatNumberController.text.isNotEmpty &&
+        _addressController.text.isNotEmpty;
   }
 
   @override

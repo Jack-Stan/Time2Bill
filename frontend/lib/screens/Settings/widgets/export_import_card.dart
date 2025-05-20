@@ -183,7 +183,12 @@ class _ExportImportCardState extends State<ExportImportCard> {
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
+                  color: Color.fromRGBO(
+                    Colors.red.r.toInt(),
+                    Colors.red.g.toInt(),
+                    Colors.red.b.toInt(),
+                    0.1,
+                  ),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Row(
@@ -200,7 +205,12 @@ class _ExportImportCardState extends State<ExportImportCard> {
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
+                  color: Color.fromRGBO(
+                    Colors.green.r.toInt(),
+                    Colors.green.g.toInt(),
+                    Colors.green.b.toInt(),
+                    0.1,
+                  ),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Row(
@@ -250,7 +260,7 @@ class _ExportImportCardState extends State<ExportImportCard> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.amber[50],
+                color: Color.fromRGBO(Colors.orange.r.toInt(), Colors.orange.g.toInt(), Colors.orange.b.toInt(), 0.1),
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(color: Colors.amber[100]!),
               ),

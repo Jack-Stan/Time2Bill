@@ -34,7 +34,6 @@ class _RegisterPageWidgetState extends State<RegisterPageWidget> {
   bool _isLoading = false;
   String? _errorMessage;
   RegistrationStep _currentStep = RegistrationStep.personalInfo;
-  bool _emailVerified = false;
 
   @override
   void initState() {
@@ -52,11 +51,15 @@ class _RegisterPageWidgetState extends State<RegisterPageWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        // Prevent going back if resuming registration
-        final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-        return args?['resumeStep'] == null;
+    // Get the arguments once to determine if we're resuming registration
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final isResuming = args?['resumeStep'] != null;
+    
+    return PopScope(
+      canPop: !isResuming, // This is a boolean value, not a function
+      // Replace deprecated onPopInvoked with onPopInvokedWithResult
+      onPopInvokedWithResult: (didPop, result) {
+        // Additional handling if needed
       },
       child: Scaffold(
         body: SingleChildScrollView(
@@ -123,7 +126,7 @@ class _RegisterPageWidgetState extends State<RegisterPageWidget> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.symmetric(vertical: 8), // Correctie hier: EdgeInsets in plaats van SizedBox
+      margin: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: Colors.red.shade50,
         border: Border.all(color: Colors.red.shade200),
@@ -436,7 +439,6 @@ class _RegisterPageWidgetState extends State<RegisterPageWidget> {
         
         if (user.emailVerified) {
           setState(() {
-            _emailVerified = true;
             _currentStep = RegistrationStep.businessDetails;
           });
           
@@ -505,8 +507,10 @@ class _RegisterPageWidgetState extends State<RegisterPageWidget> {
   }
 
   bool _validateAllRequiredSteps() {
-    return FirebaseAuth.instance.currentUser?.emailVerified ?? false &&
-           _validateBusinessDetailsStep();
+    // Fixed: Simplified to avoid the dead code warning
+    final isEmailVerified = FirebaseAuth.instance.currentUser?.emailVerified ?? false;
+    final isBusinessValid = _validateBusinessDetailsStep();
+    return isEmailVerified && isBusinessValid;
   }
 
   bool _validateBusinessDetailsStep() {

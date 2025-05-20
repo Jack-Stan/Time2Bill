@@ -406,7 +406,12 @@ class _ClientsPageState extends State<ClientsPage> {
             ),
           ),
           selected: isSelected,
-          selectedTileColor: primaryColor.withOpacity(0.1),
+          selectedTileColor: Color.fromRGBO(
+            primaryColor.r.toInt(),
+            primaryColor.g.toInt(),
+            primaryColor.b.toInt(),
+            0.1,
+          ),
           onTap: () {
             setState(() {
               _selectedClient = client;
