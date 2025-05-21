@@ -11,6 +11,7 @@ import 'package:flutter/scheduler.dart';
 
 import 'screens/Landingscreen/landing_page_wrapper.dart';
 import 'screens/Featuresscreen/FeaturesPage.dart';
+import 'screens/HowItWorksscreen/HowItWorksPage.dart';
 import 'screens/Aboutscreen/AboutPage.dart';
 import 'screens/Authscreen/LoginPage.dart';
 import 'screens/Authscreen/register_page.dart';
@@ -241,10 +242,10 @@ class MyApp extends StatelessWidget {
               ),
             ),
           );
-        },
-        routes: {
+        },        routes: {
           '/': (context) => const LandingPageWrapper(),
           '/features': (context) => const FeaturesPageWidget(),
+          '/how-it-works': (context) => const HowItWorksPageWidget(),
           '/about': (context) => const AboutPageWidget(),
           '/login': (context) => const LoginPageWidget(),
           '/register': (context) => const RegisterPageWidget(),
