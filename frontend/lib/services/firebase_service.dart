@@ -458,6 +458,21 @@ class FirebaseService {
     }
   }
 
+  Future<List<InvoiceModel>> getInvoicesForProject(String projectId) async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('User not authenticated');
+
+    final snapshot = await _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('invoices')
+        .where('projectId', isEqualTo: projectId)
+        .orderBy('invoiceDate', descending: true)
+        .get();
+
+    return snapshot.docs.map((doc) => InvoiceModel.fromFirestore(doc)).toList();
+  }
+
   Future<InvoiceModel> getInvoice(String invoiceId) async {
     final user = _auth.currentUser;
     if (user == null) throw Exception('User not authenticated');

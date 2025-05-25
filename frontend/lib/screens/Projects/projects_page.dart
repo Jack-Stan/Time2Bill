@@ -23,6 +23,10 @@ class _ProjectsPageState extends State<ProjectsPage> {
   List<Map<String, dynamic>> _projects = [];
   final FirebaseService _firebaseService = FirebaseService();
 
+  // Filter state
+  String _statusFilter = 'Alle';
+  final List<String> _statusOptions = ['Alle', 'Actief', 'Niet-actief'];
+
   @override
   void initState() {
     super.initState();
@@ -253,27 +257,55 @@ class _ProjectsPageState extends State<ProjectsPage> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        ElevatedButton.icon(
-          onPressed: _openNewProjectForm,
-          icon: const Icon(Icons.add),
-          label: const Text('Nieuw Project'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: primaryColor,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(
-              horizontal: 24,
-              vertical: 12,
+        Row(
+          children: [
+            DropdownButton<String>(
+              value: _statusFilter,
+              items: _statusOptions.map((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(value),
+                );
+              }).toList(),
+              onChanged: (String? newValue) {
+                setState(() {
+                  _statusFilter = newValue ?? 'Alle';
+                });
+              },
+              style: const TextStyle(fontSize: 16, color: Colors.black),
             ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+            const SizedBox(width: 16),
+            ElevatedButton.icon(
+              onPressed: _openNewProjectForm,
+              icon: const Icon(Icons.add),
+              label: const Text('Nieuw Project'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ],
     );
   }
 
   Widget _buildProjectList() {
+    // Filter projecten op basis van de gekozen status
+    List<Map<String, dynamic>> filteredProjects = _projects;
+    if (_statusFilter == 'Actief') {
+      filteredProjects = _projects.where((p) => (p['status']?.toLowerCase() ?? '') != 'niet-actief').toList();
+    } else if (_statusFilter == 'Niet-actief') {
+      filteredProjects = _projects.where((p) => (p['status']?.toLowerCase() ?? '') == 'niet-actief').toList();
+    }
+
     return GridView.builder(
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
@@ -281,8 +313,9 @@ class _ProjectsPageState extends State<ProjectsPage> {
         mainAxisSpacing: 16,
         childAspectRatio: 1.5,
       ),
-      itemCount: _projects.length,      itemBuilder: (context, index) {
-        final project = _projects[index];
+      itemCount: filteredProjects.length,
+      itemBuilder: (context, index) {
+        final project = filteredProjects[index];
         return ProjectCard(
           id: project['id'],
           title: project['title'],

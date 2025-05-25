@@ -58,6 +58,7 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
   void refreshActivity() {
     _fetchRecentActivity();
   }
+
   Future<void> _fetchRecentActivity() async {
     setState(() {
       _isLoading = true;
@@ -73,113 +74,58 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
       print('Fetching recent time entries for user: ${user.uid}');
 
       List<Map<String, dynamic>> activities = [];
+      Map<String, double> projectTimeTotals = {};
 
-      try {
-        // Alleen tijdregistraties ophalen via de service
-        print('Fetching time entries via Firebase Service...');
-        // Haal tot 10 entries op zodat we meer recente activiteiten kunnen tonen
-        final timeEntries = await _firebaseService.getTimeEntries();
-        
-        // Neem de eerste 10 tijdregistraties
-        if (timeEntries.isNotEmpty) {
-          final recentTimeEntries = timeEntries.take(10).map((entry) {
-            final dateStr = DateFormat('dd/MM/yyyy').format(entry.startTime);
+      // Haal tijdregistraties op
+      final timeEntries = await _firebaseService.getTimeEntries();
 
-            // Convert duration (seconds) to hours and minutes
-            final durationSeconds = entry.duration.toInt();
-            final hours = durationSeconds ~/ 3600;
-            final minutes = (durationSeconds % 3600) ~/ 60;
-            final durationStr = '${hours}h ${minutes}m';
+      // 1. Tijdregistraties verwerken
+      if (timeEntries.isNotEmpty) {
+        final recentTimeEntries = timeEntries.take(10).map((entry) {
+          final dateStr = DateFormat('dd/MM/yyyy').format(entry.startTime);
+          final durationSeconds = entry.duration.toInt();
+          final hours = durationSeconds ~/ 3600;
+          final minutes = (durationSeconds % 3600) ~/ 60;
+          final durationStr = '${hours}h ${minutes}m';
 
-            // Bepaal de titel en ondertitel
-            String title = entry.description;
-            String subtitle = entry.projectName != null && entry.projectName!.isNotEmpty 
-                ? '${entry.projectName} - $dateStr' 
-                : dateStr;
+          // Toon taaknaam als die er is
+          String title = entry.taskTitle != null && entry.taskTitle!.isNotEmpty
+              ? '${entry.taskTitle}: ${entry.description}'
+              : entry.description;
+          String subtitle = entry.projectName != null && entry.projectName!.isNotEmpty
+              ? '${entry.projectName} - ${dateStr}'
+              : dateStr;
 
-            return {
-              'id': entry.id,
-              'type': 'time',
-              'title': title,
-              'subtitle': subtitle,
-              'amount': durationStr,
-              'icon': Icons.timer,
-              'createdAt': Timestamp.fromDate(entry.startTime),
-              'projectId': entry.projectId,
-              'projectName': entry.projectName,
-            };
-          }).toList();
+          // Totaal per project optellen
+          if (entry.projectId != null) {
+            projectTimeTotals[entry.projectId!] = (projectTimeTotals[entry.projectId!] ?? 0) + entry.duration;
+          }
 
-          activities.addAll(recentTimeEntries);
-          print('✅ Successfully fetched ${recentTimeEntries.length} time entries via service');
-        }
-      } catch (e) {
-        print('❌ Error fetching time entries via service: $e');
-        
-        // Fallback direct query
-        try {
-          print('\nFalling back to direct Firestore query for time entries...');
-          final timeEntriesRef = FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .collection('timeTracking');
-          
-          final timeEntriesSnapshot = await timeEntriesRef
-              .orderBy('createdAt', descending: true)
-              .limit(10)  // 10 entries tonen
-              .get();
+          return {
+            'id': entry.id,
+            'type': 'time',
+            'title': title,
+            'subtitle': subtitle,
+            'amount': durationStr,
+            'icon': Icons.timer,
+            'createdAt': Timestamp.fromDate(entry.startTime),
+            'projectId': entry.projectId,
+            'projectName': entry.projectName,
+          };
+        }).toList();
+        activities.addAll(recentTimeEntries);
+      }
 
-          final timeEntryActivities = timeEntriesSnapshot.docs.map((doc) {
-            final data = doc.data();
-            final timestamp = data['startTime'] as Timestamp?;
-            final dateStr = timestamp != null
-                ? DateFormat('dd/MM/yyyy').format(timestamp.toDate())
-                : 'Unknown date';
-
-            // Convert duration (seconds) to hours and minutes
-            final durationSeconds = (data['duration'] as num?)?.toInt() ?? 0;
-            final hours = durationSeconds ~/ 3600;
-            final minutes = (durationSeconds % 3600) ~/ 60;
-            final durationStr = '${hours}h ${minutes}m';
-
-            // Bepaal de titel en ondertitel met projectnaam indien beschikbaar
-            final projectName = data['projectName'] as String?;
-            String subtitle = projectName != null && projectName.isNotEmpty 
-                ? '$projectName - $dateStr' 
-                : dateStr;
-
-            return {
-              'id': doc.id,
-              'type': 'time',
-              'title': data['description'] ?? 'Time Entry',
-              'subtitle': subtitle,
-              'amount': durationStr,
-              'icon': Icons.timer,
-              'createdAt': timestamp,
-              'projectId': data['projectId'],
-              'projectName': projectName,
-            };
-          }).toList();
-
-          activities.addAll(timeEntryActivities);
-          print('✅ Successfully fetched ${timeEntryActivities.length} time entries via direct query');
-        } catch (e2) {
-          print('❌ Error in fallback time entries query: $e2');
-        }
-      }      // Sort the time entries by creation date
+      // Sort time entries by creation date
       if (activities.isNotEmpty) {
         activities.sort((a, b) {
           final aTime = a['createdAt'] as Timestamp?;
           final bTime = b['createdAt'] as Timestamp?;
-          
           if (aTime == null && bTime == null) return 0;
-          if (aTime == null) return 1; // null comes last
+          if (aTime == null) return 1;
           if (bTime == null) return -1;
-          
-          return bTime.compareTo(aTime); // descending order (newest first)
+          return bTime.compareTo(aTime);
         });
-      } else {
-        print('\n⚠️ No time entries found.');
       }
 
       setState(() {
@@ -191,11 +137,10 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
         _errorMessage = 'Error loading activity data: ${error.toString()}';
         _isLoading = false;
       });
-
-      print('\n===== DASHBOARD ACTIVITY ERROR =====');
+      print('===== DASHBOARD ACTIVITY ERROR =====');
       print('Error type: ${error.runtimeType}');
-      print('Error message: $error');
-      print('===== END ERROR =====\n');
+      print('Error message: ${error}');
+      print('===== END ERROR =====');
     }
   }
 
@@ -206,7 +151,8 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),            child: Row(
+            padding: const EdgeInsets.all(16),
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
@@ -250,7 +196,8 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
                   ],
                 ),
               ),
-            )          else if (_activities.isEmpty)
+            )
+          else if (_activities.isEmpty)
             const SizedBox(
               height: 200,
               child: Center(
@@ -293,9 +240,10 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
                       color: const Color(0xFF0B5394),
                     ),
                   ),
-                  title: Text(activity['title'] ?? 'Untitled'),                  subtitle: Text(activity['subtitle'] ?? ''),
-                  trailing: Text(activity['amount'] ?? ''),                  onTap: () {
-                    // Altijd naar time-tracking navigeren met de juiste parameters
+                  title: Text(activity['title'] ?? 'Untitled'),
+                  subtitle: Text(activity['subtitle'] ?? ''),
+                  trailing: Text(activity['amount'] ?? ''),
+                  onTap: () {
                     Navigator.pushNamed(
                       context, 
                       '/time-tracking', 

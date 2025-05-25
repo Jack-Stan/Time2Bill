@@ -69,9 +69,12 @@ class _KPICardsWidgetState extends State<KPICardsWidget> {
           totalHours += entry.duration / 3600;
         }
         
-        // 3. Tel actieve projecten
+        // 3. Tel actieve projecten (case-insensitive, accepteer ook 'Active', 'active', 'actief', etc.)
         final projects = await _firebaseService.getProjects();
-        int activeProjects = projects.where((p) => p.status == 'active').length;
+        final activeProjects = projects.where((p) {
+          final status = p.status.toLowerCase();
+          return status == 'active' || status == 'actief';
+        }).length;
         
         // 4. Tel alle klanten
         final clients = await _firebaseService.getClients();
@@ -146,8 +149,8 @@ class _KPICardsWidgetState extends State<KPICardsWidget> {
     int activeProjects = 0;
     for (final doc in projectsSnapshot.docs) {
       final data = doc.data();
-      final status = data['status'] as String? ?? '';
-      if (status == 'active') {
+      final status = (data['status'] as String? ?? '').toLowerCase();
+      if (status == 'active' || status == 'actief') {
         activeProjects++;
       }
     }
