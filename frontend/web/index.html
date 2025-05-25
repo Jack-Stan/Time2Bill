@@ -33,29 +33,6 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
-  <!-- Firebase Configuration -->
-  <script type="module">
-    // Import the functions you need from the SDKs you need
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getAuth } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { getFirestore } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-    // Your web app's Firebase configuration
-    const firebaseConfig = {
-      apiKey: "AIzaSyCovzoOZbdbTyS-paUoPGoWuV2eGBBnzW8",
-      authDomain: "time2bill-19f64.firebaseapp.com",
-      projectId: "time2bill-19f64",
-      storageBucket: "time2bill-19f64.appspot.com",
-      messagingSenderId: "746331757137",
-      appId: "1:746331757137:web:YOUR_APP_ID" // You need to get this from Firebase Console
-    };
-
-    // Initialize Firebase
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const firestore = getFirestore(app);
-  </script>
-
   <!-- Flutter initialization -->
   <script src="flutter.js" defer></script>
   <script>

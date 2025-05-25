@@ -134,9 +134,9 @@ class _ClientDetailsCardState extends State<ClientDetailsCard> with SingleTicker
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildOverviewTab(),
-                _buildProjectsTab(),
-                _buildInvoicesTab(),
+                SingleChildScrollView(child: _buildOverviewTab()),
+                SingleChildScrollView(child: _buildProjectsTab()),
+                SingleChildScrollView(child: _buildInvoicesTab()),
               ],
             ),
           ),

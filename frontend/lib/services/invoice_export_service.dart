@@ -1,5 +1,9 @@
 import 'package:universal_html/html.dart' as html;
 import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:typed_data';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 // These imports are needed for the return types of the Firebase service methods
 // Adding explicit type annotations to demonstrate usage
@@ -16,32 +20,90 @@ class InvoiceExportService {
   final PdfService _pdfService = PdfService();
   final PeppolService _peppolService = PeppolService();
   
-  /// Generate and download a PDF invoice
-  Future<void> generateAndDownloadPdf(String invoiceId) async {
+  /// Generate and download a PDF invoice (optioneel: logoUrl, templateId)
+  Future<void> generateAndDownloadPdf(String invoiceId, {String? logoUrl, String? templateId}) async {
     try {
-      // Get invoice data with explicit type annotation
       final InvoiceModel invoice = await _firebaseService.getInvoice(invoiceId);
-      
-      // Get business details with explicit type annotation
       final BusinessDetails businessDetails = await _firebaseService.getBusinessDetails();
-      
-      // Generate PDF
+
+      // Genereer PDF met optioneel logo en template
       final pdfBytes = await _pdfService.generateInvoicePdf(
         invoice: invoice,
         businessDetails: businessDetails,
+        logoUrl: logoUrl,
+        templateId: templateId,
       );
-      
-      // Download the file
+
       _downloadBytes(
         bytes: pdfBytes, 
         fileName: 'factuur_${invoice.invoiceNumber}.pdf',
         mimeType: 'application/pdf',
       );
-      
       return;
     } catch (e) {
       print('Error generating PDF: $e');
       throw Exception('Failed to generate PDF: $e');
+    }
+  }
+  
+  /// Genereer en download een lege voorbeeldfactuur als PDF op basis van sjabloon-instellingen
+  Future<void> generateAndDownloadPdfPreview({
+    String? header,
+    String? footer,
+    String? color,
+    String? logoUrl,
+  }) async {
+    try {
+      // Dummy business details
+      final BusinessDetails businessDetails = BusinessDetails(
+        companyName: 'Voorbeeld BV',
+        kboNumber: '0123.456.789',
+        vatNumber: 'BE0123456789',
+        address: 'Voorbeeldstraat 1, 1000 Brussel',
+        legalForm: 'BV',
+        iban: 'BE12 3456 7890 1234',
+        defaultVatRate: 21,
+        paymentTerms: 30,
+        phone: '+32 12 34 56 78',
+        website: 'www.voorbeeld.be',
+        peppolId: null,
+      );
+      // Dummy invoice model
+      final now = DateTime.now();
+      final InvoiceModel invoice = InvoiceModel(
+        invoiceNumber: '2025-0001',
+        clientId: '',
+        clientName: 'Voorbeeldklant',
+        invoiceDate: now,
+        dueDate: now.add(const Duration(days: 30)),
+        lineItems: [
+          InvoiceLineItem(description: 'Voorbeeld product/dienst', quantity: 1, unitPrice: 100, amount: 100),
+        ],
+        subtotal: 100,
+        vatRate: 21,
+        vatAmount: 21,
+        total: 121,
+        status: 'draft',
+        projectId: null,
+        note: '',
+        createdAt: now,
+        updatedAt: now,
+      );
+      // Genereer PDF met dummy data en sjabloon
+      final pdfBytes = await _pdfService.generateInvoicePdf(
+        invoice: invoice,
+        businessDetails: businessDetails,
+        logoUrl: logoUrl,
+        templateId: null,
+      );
+      _downloadBytes(
+        bytes: pdfBytes,
+        fileName: 'voorbeeld_factuur.pdf',
+        mimeType: 'application/pdf',
+      );
+    } catch (e) {
+      print('Error generating PDF preview: $e');
+      throw Exception('Failed to generate PDF preview: $e');
     }
   }
   
@@ -154,6 +216,52 @@ class InvoiceExportService {
         'success': false,
         'message': 'Fout bij het verzenden via Peppol: $e',
       };
+    }
+  }
+  
+  /// Stuur een PDF-factuur via e-mail naar de client (optioneel: logoUrl, templateId)
+  Future<void> sendInvoicePdfByEmail(String invoiceId, {String? logoUrl, String? templateId}) async {
+    try {
+      final InvoiceModel invoice = await _firebaseService.getInvoice(invoiceId);
+      final BusinessDetails businessDetails = await _firebaseService.getBusinessDetails();
+      final ClientModel client = await _firebaseService.getClient(invoice.clientId);
+
+      // Genereer PDF met optioneel logo en template
+      final pdfBytes = await _pdfService.generateInvoicePdf(
+        invoice: invoice,
+        businessDetails: businessDetails,
+        logoUrl: logoUrl,
+        templateId: templateId,
+      );
+
+      final pdfBase64 = base64Encode(pdfBytes);
+
+      final String? clientEmail = client.email;
+      if (clientEmail == null || clientEmail.isEmpty) {
+        throw Exception('Client heeft geen e-mailadres.');
+      }
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('User not authenticated');
+
+      final response = await http.post(
+        Uri.parse('https://your-backend-url/api/send-invoice-email'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'to': clientEmail,
+          'subject': 'Factuur ${invoice.invoiceNumber}',
+          'body': 'Beste ${client.name},\n\nIn de bijlage vindt u uw factuur.\n\nMet vriendelijke groet,\n${businessDetails.companyName}',
+          'pdfBase64': pdfBase64,
+          'fileName': 'factuur_${invoice.invoiceNumber}.pdf',
+        }),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Fout bij verzenden e-mail: ${response.body}');
+      }
+    } catch (e) {
+      print('Error sending invoice PDF by email: $e');
+      throw Exception('Failed to send invoice PDF by email: $e');
     }
   }
   

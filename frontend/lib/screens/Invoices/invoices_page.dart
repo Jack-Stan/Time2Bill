@@ -483,6 +483,19 @@ class _InvoicesPageState extends State<InvoicesPage> with SingleTickerProviderSt
         Row(
           children: [
             ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pushNamed(context, '/edit-invoice-template');
+              },
+              icon: const Icon(Icons.design_services),
+              label: const Text('Sjabloon bewerken'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+            const SizedBox(width: 16),
+            ElevatedButton.icon(
               onPressed: _showNewRecurringInvoiceForm,
               icon: const Icon(Icons.repeat),
               label: const Text('New Recurring'),

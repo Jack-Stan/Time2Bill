@@ -51,14 +51,21 @@ class _ThemeSettingsCardState extends State<ThemeSettingsCard> {
       
       await widget.onSave(settings);
       
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
     } catch (error) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
     }
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
   }
 
   @override

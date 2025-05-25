@@ -76,18 +76,20 @@ class _NewInvoiceFormState extends State<NewInvoiceForm> {
       // Load clients
       try {
         final clients = await _firebaseService.getClients();
+        if (!mounted) return;
         setState(() {
           _clients = clients;
         });
         print('Successfully loaded ${clients.length} clients');
       } catch (e) {
         print('Error loading clients via service: $e');
-        _loadClientsDirectly();
+        await _loadClientsDirectly();
       }
       
       // Load projects
       try {
         final projects = await _firebaseService.getProjects();
+        if (!mounted) return;
         setState(() {
           _projects = projects.map((p) => {
             'id': p.id,
@@ -98,14 +100,16 @@ class _NewInvoiceFormState extends State<NewInvoiceForm> {
         print('Successfully loaded ${projects.length} projects');
       } catch (e) {
         print('Error loading projects via service: $e');
-        _loadProjectsDirectly();
+        await _loadProjectsDirectly();
       }
       
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
     } catch (e) {
       print('Error in _loadData: $e');
+      if (!mounted) return;
       setState(() {
         _errorMessage = 'Failed to load required data: ${e.toString()}';
         _isLoading = false;
@@ -161,6 +165,7 @@ class _NewInvoiceFormState extends State<NewInvoiceForm> {
       _errorMessage = 'Error loading invoice: $e';
       print('Error loading invoice: $e');
     } finally {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
@@ -180,12 +185,14 @@ class _NewInvoiceFormState extends State<NewInvoiceForm> {
           
       final clients = snapshot.docs.map((doc) => ClientModel.fromFirestore(doc)).toList();
       
+      if (!mounted) return;
       setState(() {
         _clients = clients;
       });
       print('Successfully loaded ${clients.length} clients directly');
     } catch (e) {
       print('Error loading clients directly: $e');
+      if (!mounted) return;
       setState(() {
         _errorMessage = 'Failed to load clients: ${e.toString()}';
       });
@@ -212,6 +219,7 @@ class _NewInvoiceFormState extends State<NewInvoiceForm> {
         };
       }).toList();
       
+      if (!mounted) return;
       setState(() {
         _projects = projects;
       });
@@ -511,7 +519,7 @@ class _NewInvoiceFormState extends State<NewInvoiceForm> {
                                           labelText: 'Client *',
                                           border: OutlineInputBorder(),
                                         ),
-                                        value: _selectedClientId,
+                                        value: _clients.any((client) => client.id == _selectedClientId) ? _selectedClientId : null,
                                         items: _clients.map((client) {
                                           return DropdownMenuItem<String>(
                                             value: client.id,
@@ -548,7 +556,7 @@ class _NewInvoiceFormState extends State<NewInvoiceForm> {
                                           labelText: 'Project (Optional)',
                                           border: OutlineInputBorder(),
                                         ),
-                                        value: _selectedProjectId,
+                                        value: _projects.any((p) => p['id'] == _selectedProjectId) ? _selectedProjectId : null,
                                         items: [
                                           const DropdownMenuItem<String>(
                                             value: null,

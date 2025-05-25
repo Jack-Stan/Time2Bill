@@ -26,6 +26,7 @@ import 'screens/Clients/clients_page.dart';
 import 'screens/Reports/reports_page.dart';
 import 'screens/Settings/settings_page.dart';
 import 'widgets/firebase_connectivity_monitor.dart';
+import 'screens/Invoices/edit_invoice_template_page.dart';
 
 void _configureApp() {
   if (kIsWeb) {
@@ -258,6 +259,7 @@ class MyApp extends StatelessWidget {
           '/reports': (context) => const ReportsPage(),
           '/settings': (context) => const SettingsPage(),
           '/profile': (context) => const ProfilePage(),
+          '/edit-invoice-template': (context) => const EditInvoiceTemplatePage(),
         },
         initialRoute: '/',
       ),
