@@ -29,10 +29,14 @@ import 'widgets/firebase_connectivity_monitor.dart';
 import 'screens/Invoices/edit_invoice_template_page.dart';
 
 void _configureApp() {
+  // Show startup message
+  print('\n🚀 Time2Bill frontend running...\n');
+  
   if (kIsWeb) {
+    // Disable all debug prints except errors
     debugPrint = (String? message, {int? wrapWidth}) {
-      if (message != null && message.contains('error')) {
-        print(message);
+      if (message != null && message.contains('Error:')) {
+        print('❌ $message');
       }
     };
 
@@ -44,6 +48,7 @@ void _configureApp() {
           details.exception.toString().contains('_debugDuringDeviceUpdate')) {
         return;
       }
+      // In production, you might want to send these to an error tracking service
       FlutterError.presentError(details);
     };
 
@@ -65,10 +70,7 @@ void main() async {
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
   ]);
-
   try {
-    print('Starting Firebase initialization...');
-
     await Firebase.initializeApp(
       options: const FirebaseOptions(
         apiKey: "AIzaSyCovzoOZbdbTyS-paUoPGoWuV2eGBBnzW8",
@@ -80,68 +82,47 @@ void main() async {
       ),
     );
 
-    print('Firebase initialized successfully');
-
     final settings = Settings(
       persistenceEnabled: true,
       cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
     );
 
     FirebaseFirestore.instance.settings = settings;
-    print('Firestore persistence configured with modern settings');
 
     try {
       final timeoutDuration = Duration(seconds: 15);
-      print('Testing Firestore connection (timeout: ${timeoutDuration.inSeconds}s)...');
-
+      print('Testing Firestore connection (timeout: ${timeoutDuration.inSeconds}s)...');      // Verify Firestore connection
       await FirebaseFirestore.instance.collection('system').doc('status').get()
           .timeout(timeoutDuration);
-      print('✅ Firestore connection test successful');
 
+      // Check current user and fetch user data if logged in
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        print('Current user UID: ${user.uid}');
-        print('Email verified: ${user.emailVerified}');
-
         try {
-          final userData = await FirebaseFirestore.instance
+          await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
               .get();
-
-          if (userData.exists) {
-            print('User document exists: ${userData.data()?.keys.join(", ")}');
-          } else {
-            print('⚠️ User document does not exist');
-          }
         } catch (e) {
-          print('⚠️ Failed to fetch user data: $e');
+          // Handle error silently or log to analytics
         }
-      } else {
-        print('No user logged in');
-      }
-
-    } catch (e) {
-      print('❌ Firestore connection test failed: $e');
-
+      }    } catch (e) {
       try {
         await FirebaseFirestore.instance.enableNetwork();
-        print('Enabled network for Firestore');
       } catch (netError) {
-        print('Failed to enable network: $netError');
+        // Handle network error silently
       }
     }
 
     try {
-      final settings = await FirebaseFirestore.instance.settings;
-      print('Firestore persistence enabled: ${settings.persistenceEnabled}');
-      print('Firestore cache size: ${settings.cacheSizeBytes == -1 ? "Unlimited" : settings.cacheSizeBytes}');
+      // Verify Firestore settings
+      await FirebaseFirestore.instance.settings;
     } catch (e) {
-      print('Error checking Firestore settings: $e');
+      // Handle error silently or log to analytics
     }
 
   } catch (e) {
-    print('❌❌❌ Critical error initializing Firebase: $e');
+    // Log critical error to analytics service in production
   }
 
   runApp(const MyApp());
@@ -173,8 +154,7 @@ class MyApp extends StatelessWidget {
           ),
           bottomSheetTheme: const BottomSheetThemeData(
             constraints: BoxConstraints(maxWidth: double.infinity),
-          ),
-          dialogTheme: const DialogTheme(
+          ),          dialogTheme: const DialogThemeData(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.all(Radius.circular(8)),
             ),

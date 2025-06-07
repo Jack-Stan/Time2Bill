@@ -428,26 +428,7 @@ class FirebaseService {
     try {
       final snapshot = await query.get();
       
-      print('Fetched ${snapshot.docs.length} invoices from Firestore');
-      
-      // Log details of the first 2 invoices for debugging with null safety
-      if (snapshot.docs.isNotEmpty) {
-        try {
-          final firstData = snapshot.docs.first.data() as Map<String, dynamic>?;
-          final firstInvoiceNumber = firstData?['invoiceNumber'] ?? 'No number';
-          final firstTotal = firstData?['total'] ?? 'No total';
-          print('First invoice: $firstInvoiceNumber - $firstTotal');
-          
-          if (snapshot.docs.length > 1) {
-            final secondData = snapshot.docs[1].data() as Map<String, dynamic>?;
-            final secondInvoiceNumber = secondData?['invoiceNumber'] ?? 'No number';
-            final secondTotal = secondData?['total'] ?? 'No total';
-            print('Second invoice: $secondInvoiceNumber - $secondTotal');
-          }
-        } catch (e) {
-          print('Error parsing invoice data: $e');
-        }
-      }
+            // Convert invoices to models and return
 
       return snapshot.docs
           .map((doc) => InvoiceModel.fromFirestore(doc))
@@ -672,6 +653,32 @@ class FirebaseService {
         .collection('timeTracking')
         .doc(entryId)
         .delete();
+  }
+
+  // Helper for time tracking: get entries for a date range
+  Future<List<TimeEntryModel>> getTimeEntriesForDateRange(DateTime start, DateTime end) async {
+    return getTimeEntries(startDate: start, endDate: end);
+  }
+  // Helper for time tracking: mark a project task as in progress (sets completed=false)
+  Future<void> markTaskInProgress(String projectId, String taskId) async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('User not authenticated');
+    final projectRef = _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('projects')
+        .doc(projectId);
+    final projectDoc = await projectRef.get();
+    if (!projectDoc.exists) return;
+    final data = projectDoc.data();
+    if (data == null || data['todoItems'] == null) return;
+    List todoItems = List.from(data['todoItems']);
+    for (var item in todoItems) {
+      if (item['id'] == taskId) {
+        item['completed'] = false;
+      }
+    }
+    await projectRef.update({'todoItems': todoItems});
   }
 
   // Test Firebase permissions

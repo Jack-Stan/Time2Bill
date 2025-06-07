@@ -20,36 +20,39 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
   List<Map<String, dynamic>> _activities = [];
   final FirebaseService _firebaseService = FirebaseService();
   StreamSubscription<bool>? _refreshSubscription;
-
   @override
   void initState() {
     super.initState();
     _fetchRecentActivity();
-    // Registreer voor app lifecycle events
+    // Register for app lifecycle events
     WidgetsBinding.instance.addObserver(this);
     
-    // Luisteren naar refresh events van de Dashboard service
+    // Listen to refresh events from the Dashboard service
+    // Initialize dashboard refresh service
     final refreshService = DashboardRefreshService();
     _refreshSubscription = refreshService.refreshStream.listen((refresh) {
       if (mounted && refresh) {
         _fetchRecentActivity();
       }
-    });
+    }, onError: (error) {
+      // Handle stream errors silently
+    }, cancelOnError: false);
   }
-
   @override
   void dispose() {
-    // Verwijder de observer bij het vernietigen van de widget
-    WidgetsBinding.instance.removeObserver(this);
-    // Annuleer de subscription
+    // Cancel all subscriptions and cleanup resources
     _refreshSubscription?.cancel();
+    _refreshSubscription = null;
+    
+    // Remove the lifecycle observer
+    WidgetsBinding.instance.removeObserver(this);
+    
     super.dispose();
   }
-
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Wanneer de app weer wordt geopend of naar de voorgrond komt
-    if (state == AppLifecycleState.resumed) {
+    // Only refresh if the widget is still mounted and app is resumed
+    if (mounted && state == AppLifecycleState.resumed) {
       _fetchRecentActivity();
     }
   }
@@ -58,20 +61,17 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
   void refreshActivity() {
     _fetchRecentActivity();
   }
-
   Future<void> _fetchRecentActivity() async {
+    if (!mounted) return;
+    
     setState(() {
       _isLoading = true;
       _errorMessage = null;
-    });
-
-    try {
-      print('===== FETCHING DASHBOARD ACTIVITY =====');
+    });try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         throw Exception('User not authenticated');
       }
-      print('Fetching recent time entries for user: ${user.uid}');
 
       List<Map<String, dynamic>> activities = [];
       Map<String, double> projectTimeTotals = {};
@@ -128,19 +128,19 @@ class DashboardOverviewState extends State<DashboardOverview> with WidgetsBindin
         });
       }
 
-      setState(() {
-        _activities = activities;
-        _isLoading = false;
-      });
+            if (mounted) {
+        setState(() {
+          _activities = activities;
+          _isLoading = false;
+        });
+      }
     } catch (error) {
-      setState(() {
-        _errorMessage = 'Error loading activity data: ${error.toString()}';
-        _isLoading = false;
-      });
-      print('===== DASHBOARD ACTIVITY ERROR =====');
-      print('Error type: ${error.runtimeType}');
-      print('Error message: ${error}');
-      print('===== END ERROR =====');
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Error loading activity data: ${error.toString()}';
+          _isLoading = false;
+        });
+      }
     }
   }
 

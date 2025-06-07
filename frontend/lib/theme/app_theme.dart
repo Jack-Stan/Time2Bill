@@ -8,9 +8,8 @@ class AppTheme {
         colorScheme: ColorScheme.light(
           primary: primaryColor,
           secondary: secondaryColor,
-        ),
-        useMaterial3: true,
-        cardTheme: CardTheme(
+        ),        useMaterial3: true,
+        cardTheme: CardThemeData(
           elevation: 4,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),

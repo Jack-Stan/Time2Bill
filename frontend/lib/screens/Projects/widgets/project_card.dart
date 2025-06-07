@@ -42,7 +42,6 @@ class ProjectCard extends StatelessWidget {
     if (todoItems == null) return 0;
     return todoItems!.where((todo) => todo['completed'] == false).length;
   }
-
   @override
   Widget build(BuildContext context) {
     final incompleteTodos = _getIncompleteTodoCount();
@@ -52,10 +51,12 @@ class ProjectCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Padding(
+      child: Container(
+        height: 170, // Set a fixed height that accommodates all content
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min, // Use minimum space needed
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -151,32 +152,35 @@ class ProjectCard extends StatelessWidget {
                     ),
                   ),
               ],
-            ),
-            const SizedBox(height: 12),
+            ),            const SizedBox(height: 12),
             Text(
               description,
               style: const TextStyle(fontSize: 14),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-            const Spacer(),
+            const SizedBox(height: 8), // Fixed height instead of Spacer
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.visibility, size: 20),
+                  icon: const Icon(Icons.visibility, size: 18),
                   onPressed: onView,
                   tooltip: 'Bekijken',
                   color: const Color(0xFF0B5394),
+                  padding: const EdgeInsets.all(4),
+                  constraints: const BoxConstraints(),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.edit, size: 20),
+                  icon: const Icon(Icons.edit, size: 18),
                   onPressed: onEdit,
                   tooltip: 'Bewerken',
                   color: Colors.orange,
+                  padding: const EdgeInsets.all(4),
+                  constraints: const BoxConstraints(),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.delete, size: 20),
+                  icon: const Icon(Icons.delete, size: 18),
                   onPressed: () {
                     // Show confirmation dialog
                     showDialog(

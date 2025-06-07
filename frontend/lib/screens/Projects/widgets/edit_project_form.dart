@@ -26,20 +26,18 @@ class _EditProjectFormState extends State<EditProjectForm> {
   final TextEditingController _hourlyRateController = TextEditingController();
   
   DateTime _startDate = DateTime.now();
-  DateTime? _endDate;
-  String _status = 'actief';
+  DateTime? _endDate;  String _status = 'Actief';
   
   List<Map<String, dynamic>> _clients = [];
   bool _isLoading = false;
   String? _errorMessage;
 
   final statusOptions = [
-    'actief',
-    'inactief',
-    'voltooid',
-    'in afwachting',
+    'Actief',
+    'Inactief',
+    'Voltooid',
+    'In afwachting',
   ];
-
   @override
   void initState() {
     super.initState();
@@ -50,7 +48,19 @@ class _EditProjectFormState extends State<EditProjectForm> {
     _selectedClient = widget.project.clientId;
     _startDate = widget.project.startDate;
     _endDate = widget.project.endDate;
-    _status = widget.project.status;
+    
+    // Convert status to match our capitalized options if needed
+    if (widget.project.status == 'actief') {
+      _status = 'Actief';
+    } else if (widget.project.status == 'inactief') {
+      _status = 'Inactief';
+    } else if (widget.project.status == 'voltooid') {
+      _status = 'Voltooid';
+    } else if (widget.project.status == 'in afwachting') {
+      _status = 'In afwachting';
+    } else {
+      _status = widget.project.status;
+    }
     
     _fetchClients();
   }
@@ -317,8 +327,12 @@ class _EditProjectFormState extends State<EditProjectForm> {
       },
     );
   }
-
   Widget _buildStatusDropdown() {
+    // Ensure the current status value is one of the available options
+    if (!statusOptions.contains(_status)) {
+      _status = statusOptions[0]; // Default to first option if not found
+    }
+    
     return DropdownButtonFormField<String>(
       decoration: const InputDecoration(
         labelText: 'Status',

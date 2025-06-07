@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:table_calendar/table_calendar.dart';
 import '../Dashboard/widgets/sidebar.dart';
 import '../Dashboard/models/timer_state.dart';
 import '../../services/firebase_service.dart';
@@ -17,7 +16,8 @@ class TimeTrackingPage extends StatefulWidget {
   State<TimeTrackingPage> createState() => _TimeTrackingPageState();
 }
 
-class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerProviderStateMixin {
+class _TimeTrackingPageState extends State<TimeTrackingPage>
+    with SingleTickerProviderStateMixin {
   int _selectedIndex = 1; // TimeTracking tab index
   final Color primaryColor = const Color(0xFF0B5394);
   bool _isLoading = true;
@@ -42,7 +42,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
   bool _isBillable = true;
   String? _selectedTaskId;
   List<Map<String, dynamic>> _tasksForSelectedProject = [];
-  
+
   // Stats
   Duration _todayDuration = Duration.zero;
   Duration _weekDuration = Duration.zero;
@@ -60,71 +60,21 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    
-    // Handle route arguments if they exist
     final routeArgs = ModalRoute.of(context)?.settings.arguments;
     if (routeArgs != null && routeArgs is Map<String, dynamic>) {
-      // If project ID is passed, select it
       if (routeArgs.containsKey('selectedProjectId')) {
-        final projectId = routeArgs['selectedProjectId'] as String?;
-        if (projectId != null && _selectedProjectId != projectId) {
-          _selectedProjectId = projectId;
-          
-          // Ensure projects are loaded before accessing them
-          if (_projects.isNotEmpty) {
-            // Find the project in the list
-            final project = _projects.firstWhere(
-              (p) => p.id == projectId,
-              orElse: () => ProjectModel(
-                title: '',
-                clientId: '',
-                clientName: '',
-                hourlyRate: 0,
-                startDate: DateTime.now(),
-              ),
-            );
-            
-            // Set client ID if available
-            if (project.clientId != null && project.clientId!.isNotEmpty) {
-              _selectedClientId = project.clientId;
-            }
-            
-            // Update tasks for the selected project
-            _tasksForSelectedProject = _getTasksForProject(projectId);
-            
-            // If a suggested task ID is passed, select it
-            if (routeArgs.containsKey('suggestedTaskId')) {
-              final taskId = routeArgs['suggestedTaskId'] as String?;
-              if (taskId != null && _tasksForSelectedProject.any((t) => t['id'] == taskId)) {
-                _selectedTaskId = taskId;
-                
-                // Optionally pre-fill the description with the task title
-                final task = _tasksForSelectedProject.firstWhere(
-                  (t) => t['id'] == taskId,
-                  orElse: () => {'title': ''},
-                );
-                if (task['title'] != null && task['title'].toString().isNotEmpty) {
-                  _descriptionController.text = task['title'];
-                }
-                
-                // Auto-open the time entry modal
-                Future.delayed(const Duration(milliseconds: 500), () {
-                  if (mounted) {
-                    _showAddTimeEntryModal();
-                  }
-                });
-              }
-            }
-          } else {
-            // If projects aren't loaded yet, we'll handle this after loading
-            // Store the IDs to use after loading is complete
-            Future.delayed(const Duration(seconds: 1), () {
-              if (mounted && _projects.isNotEmpty) {
-                didChangeDependencies();
-              }
-            });
-          }
-        }
+        _selectedProjectId = routeArgs['selectedProjectId'] as String?;
+        _selectedProjectFilter = _selectedProjectId;
+        _safeSetState(() {
+          _selectedProjectId = _selectedProjectFilter;
+        });
+      }
+      if (routeArgs.containsKey('selectedClientId')) {
+        _selectedClientId = routeArgs['selectedClientId'] as String?;
+        _selectedClientFilter = _selectedClientId;
+        _safeSetState(() {
+          _selectedClientId = _selectedClientFilter;
+        });
       }
     }
   }
@@ -145,110 +95,54 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
   }
 
   Future<void> _loadData() async {
-    // Controleer of widget nog mounted is voordat setState wordt aangeroepen
     if (!mounted) return;
-    
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
-
     try {
-      print('Loading time tracking data...');
-      
-      // Bepaal start- en einddatum voor de query
-      final startOfDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-      final endOfDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, 23, 59, 59);
-      
-      print('Fetching time entries for date range: $startOfDay to $endOfDay');
-      
-      // Laad tijdregistraties voor de geselecteerde dag
-      List<TimeEntryModel> timeEntries;
-      try {
-        // Gebruik FirebaseService om tijdregistraties op te halen
-        timeEntries = await _firebaseService.getTimeEntries(
-          startDate: startOfDay,
-          endDate: endOfDay,
-        );
-        print('Successfully loaded ${timeEntries.length} time entries via service');
-      } catch (e) {
-        print('Error loading time entries via service: $e');
-        
-        // Fallback naar directe Firestore-query
-        if (!mounted) return; // Extra check toegevoegd
-        
-        print('Falling back to direct Firestore query for time entries');
-        final user = FirebaseAuth.instance.currentUser;
-        if (user == null) throw Exception('User not authenticated');
-        
-        final snapshot = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('timeTracking')
-            .where('startTime', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
-            .where('startTime', isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
-            .get();
-            
-        timeEntries = snapshot.docs.map((doc) => TimeEntryModel.fromFirestore(doc)).toList();
-        print('Successfully loaded ${timeEntries.length} time entries via direct query');
-      }
-      
-      // Laad projecten voor dropdown
-      List<ProjectModel> projects;
-      try {
-        // Gebruik FirebaseService om projecten op te halen
-        projects = await _firebaseService.getProjects();
-        print('Successfully loaded ${projects.length} projects via service');
-      } catch (e) {
-        print('Error loading projects via service: $e');
-        
-        // Fallback naar directe Firestore-query
-        if (!mounted) return; // Extra check toegevoegd
-        
-        print('Falling back to direct Firestore query for projects');
-        final user = FirebaseAuth.instance.currentUser;
-        if (user == null) throw Exception('User not authenticated');
-        
-        final snapshot = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('projects')
-            .get();
-            
-        projects = snapshot.docs.map((doc) => ProjectModel.fromFirestore(doc)).toList();
-        print('Successfully loaded ${projects.length} projects via direct query');
-      }
+      // For the calendar view, we want to load data for the entire month
+      final startOfMonth = DateTime(_selectedDate.year, _selectedDate.month, 1);
+      final endOfMonth = DateTime(
+        _selectedDate.year,
+        _selectedDate.month + 1,
+        0,
+        23,
+        59,
+        59,
+      );
 
-      // Controleer of widget nog mounted is voordat setState wordt aangeroepen
-      if (!mounted) return;
-      
-      setState(() {
+      List<TimeEntryModel> timeEntries = await _firebaseService.getTimeEntries(
+        startDate: startOfMonth,
+        endDate: endOfMonth,
+      );
+      List<ProjectModel> projects = await _firebaseService.getProjects();
+      _safeSetState(() {
         _timeEntries = timeEntries;
         _projects = projects;
         _isLoading = false;
       });
-      
     } catch (e) {
       print('Error loading time tracking data: $e');
-      
-      // Controleer of widget nog mounted is voordat setState wordt aangeroepen
       if (!mounted) return;
-      
       setState(() {
-        _errorMessage = 'Error loading data: ${e.toString()}';
         _isLoading = false;
+        _errorMessage = 'Fout bij laden van tijdregistraties.';
       });
     }
   }
 
   Future<void> _loadClients() async {
     try {
-      final clients = await _firebaseService.getClients();
+      List<ClientModel> clients = await _firebaseService.getClients();
       _safeSetState(() {
         _clients = clients;
       });
     } catch (e) {
       print('Error loading clients: $e');
+      _safeSetState(() {
+        _errorMessage = 'Fout bij laden van klanten.';
+      });
     }
   }
 
@@ -256,45 +150,46 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
     try {
       final now = DateTime.now();
       final startOfToday = DateTime(now.year, now.month, now.day);
-      final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+      final startOfWeek = startOfToday.subtract(
+        Duration(days: startOfToday.weekday - 1),
+      );
       final startOfMonth = DateTime(now.year, now.month, 1);
 
-      // Bereken dagelijkse duur
+      final endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59);
+      final endOfWeek = startOfWeek.add(
+        const Duration(days: 6, hours: 23, minutes: 59, seconds: 59),
+      );
+      final endOfMonth = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+
       final todayEntries = await _firebaseService.getTimeEntries(
         startDate: startOfToday,
+        endDate: endOfDay,
       );
-      
-      // Bereken wekelijkse duur
+
       final weekEntries = await _firebaseService.getTimeEntries(
         startDate: startOfWeek,
+        endDate: endOfWeek,
       );
-      
-      // Bereken maandelijkse duur
+
       final monthEntries = await _firebaseService.getTimeEntries(
         startDate: startOfMonth,
+        endDate: endOfMonth,
       );
 
-      // Bereken totale duur voor elke periode
-      int todaySeconds = 0;
-      int weekSeconds = 0;
-      int monthSeconds = 0;
-
-      for (var entry in todayEntries) {
-        todaySeconds += entry.duration.toInt();
-      }
-
-      for (var entry in weekEntries) {
-        weekSeconds += entry.duration.toInt();
-      }
-
-      for (var entry in monthEntries) {
-        monthSeconds += entry.duration.toInt();
-      }
+      Duration today = Duration(
+        seconds: todayEntries.fold(0, (sum, e) => sum + e.duration.toInt()),
+      );
+      Duration week = Duration(
+        seconds: weekEntries.fold(0, (sum, e) => sum + e.duration.toInt()),
+      );
+      Duration month = Duration(
+        seconds: monthEntries.fold(0, (sum, e) => sum + e.duration.toInt()),
+      );
 
       _safeSetState(() {
-        _todayDuration = Duration(seconds: todaySeconds);
-        _weekDuration = Duration(seconds: weekSeconds);
-        _monthDuration = Duration(seconds: monthSeconds);
+        _todayDuration = today;
+        _weekDuration = week;
+        _monthDuration = month;
       });
     } catch (e) {
       print('Error calculating stats: $e');
@@ -308,146 +203,87 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
   }
 
   Future<void> _addTimeEntry() async {
-    // Validatie
     if (_descriptionController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a description')),
-      );
+      setState(() {
+        _errorMessage = 'Beschrijving is verplicht.';
+      });
       return;
     }
-
     if (_startTime == null || _endTime == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select start and end times')),
-      );
+      setState(() {
+        _errorMessage = 'Start- en eindtijd zijn verplicht.';
+      });
       return;
     }
-    
     if (_endTime!.isBefore(_startTime!)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('End time cannot be before start time')),
-      );
+      setState(() {
+        _errorMessage = 'Eindtijd mag niet voor starttijd liggen.';
+      });
       return;
     }
-
     setState(() {
       _isSaving = true;
+      _errorMessage = null;
     });
-
     try {
-      // Bereken duur in seconden
-      final durationInSeconds = _endTime!.difference(_startTime!).inSeconds;
-      
-      // Zoek project details op als er een project is geselecteerd
-      String? projectName;
-      String? clientId = _selectedClientId;
-      String? clientName;
-      String? taskId = _selectedTaskId;
-      String? taskTitle;
-      
-      if (_selectedProjectId != null) {
-        final project = _projects.firstWhere(
-          (p) => p.id == _selectedProjectId,
-          orElse: () => ProjectModel(
-            title: 'Unknown Project',
-            clientId: '',
-            clientName: '',
-            hourlyRate: 0,
-            startDate: DateTime.now(),
-          ),
-        );
-        
-        projectName = project.title;
-        
-        if (clientId == null) {
-          clientId = project.clientId;
-        }
-        
-        // Vind clientnaam op basis van clientId
-        if (clientId != null && clientId.isNotEmpty) {
-          final client = _clients.firstWhere(
-            (c) => c.id == clientId,
-            orElse: () => ClientModel(name: 'Unknown Client'),
-          );
-          clientName = client.name;
-        }
-        
-        // Get task title if a task is selected
-        if (taskId != null && taskId.isNotEmpty) {
-          final tasks = _getTasksForProject(_selectedProjectId);
-          final task = tasks.firstWhere(
-            (t) => t['id'] == taskId,
-            orElse: () => {'title': 'Unknown Task'},
-          );
-          taskTitle = task['title'] as String?;
-          
-          // If no description was entered, use the task title
-          if (_descriptionController.text.isEmpty && taskTitle != null) {
-            _descriptionController.text = taskTitle;
-          }
-        }
-      }
-
-      // Maak TimeEntry model
-      final newTimeEntry = TimeEntryModel(
+      final duration = _endTime!.difference(_startTime!).inSeconds.toDouble();
+      final project = _projects.firstWhere(
+        (p) => p.id == _selectedProjectId,
+        orElse:
+            () => ProjectModel(
+              id: '',
+              title: '',
+              clientId: '',
+              todoItems: [],
+              hourlyRate: 0,
+              startDate: DateTime.now(),
+            ),
+      );
+      final client = _clients.firstWhere(
+        (c) => c.id == _selectedClientId,
+        orElse: () => ClientModel(id: '', name: ''),
+      );
+      final entry = TimeEntryModel(
         description: _descriptionController.text,
         startTime: _startTime!,
-        endTime: _endTime,
-        duration: durationInSeconds.toDouble(),
+        endTime: _endTime!,
+        duration: duration,
         projectId: _selectedProjectId,
-        projectName: projectName,
-        clientId: clientId,
-        clientName: clientName,
+        projectName: project.title,
+        clientId: _selectedClientId,
+        clientName: client.name,
         billable: _isBillable,
-        taskId: taskId,
-        taskTitle: taskTitle,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        taskId: _selectedTaskId,
+        taskTitle:
+            _tasksForSelectedProject.firstWhere(
+              (t) => t['id'] == _selectedTaskId,
+              orElse: () => {'title': null},
+            )['title'],
       );
-
-      print('Saving time entry: ${newTimeEntry.toMap()}');
-      
-      // Bewaar in Firebase via service
-      try {
-        final String entryId = await _firebaseService.addTimeEntry(newTimeEntry);
-        print('Successfully saved time entry with ID: $entryId');
-          // If this is linked to a task, refresh the project to update task status if needed
-        if (taskId != null && _selectedProjectId != null) {
-          _updateProjectTask(_selectedProjectId!, taskId);
-        }
-      } catch (e) {
-        print('Error saving time entry: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving time entry: $e')),
-        );
+      await _firebaseService.addTimeEntry(entry);
+      if (_selectedProjectId != null && _selectedTaskId != null) {
+        await _updateProjectTask(_selectedProjectId!, _selectedTaskId!);
       }
-      
-      // Refresh time entries
       await _loadData();
-      
+      await _calculateStats();
+      Navigator.of(context).pop();
     } catch (e) {
-      print('Error in _addTimeEntry: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      setState(() {
+        _errorMessage = 'Fout bij opslaan van tijdregistratie.';
+      });
     } finally {
       setState(() {
         _isSaving = false;
-        _descriptionController.clear();
-        _selectedClientId = null;
-        _selectedProjectId = null;
-        _selectedTaskId = null;
-        _startTime = null;
-        _endTime = null;
-        _isBillable = true;
-        _tasksForSelectedProject = [];
       });
     }
   }
-  
+
   // Method to update project task if needed (mark as in progress, etc.)
   Future<void> _updateProjectTask(String projectId, String taskId) async {
     try {
-      // This is where you could update the task status to "in progress" or similar
-      // For now, we'll just log it
+      await _firebaseService.markTaskInProgress(projectId, taskId);
       print('Time entry added for project $projectId, task $taskId');
     } catch (e) {
       print('Error updating project task: $e');
@@ -456,307 +292,16 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
 
   Future<void> _deleteTimeEntry(String timeEntryId) async {
     try {
-      // Gebruik FirebaseService voor verwijderen
       await _firebaseService.deleteTimeEntry(timeEntryId);
-      
-      // Vernieuw lijst
-      _loadData();
-      _calculateStats();
-      
-      // Toon succes melding
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Time entry deleted successfully')),
-      );
+      await _loadData();
+      await _calculateStats();
     } catch (e) {
-      print('Error deleting time entry: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error deleting time entry: ${e.toString()}')),
-      );
+      setState(() {
+        _errorMessage = 'Fout bij verwijderen van tijdregistratie.';
+      });
     }
   }
 
-  void _showAddTimeEntryModal() {
-    // Reset form state
-    _descriptionController.clear();
-    setState(() {
-      _selectedProjectId = null;
-      _selectedClientId = null;
-      _startTime = null;
-      _endTime = null;
-      _isBillable = true;
-    });
-    
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) {
-          return Dialog(
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              constraints: const BoxConstraints(maxWidth: 500),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Add Time Entry',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    TextField(
-                      controller: _descriptionController,
-                      decoration: const InputDecoration(
-                        labelText: 'Description',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // Client selection
-                    DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(
-                        labelText: 'Client',
-                        border: OutlineInputBorder(),
-                      ),
-                      value: _selectedClientId,
-                      items: [
-                        const DropdownMenuItem<String>(
-                          value: null,
-                          child: Text('No Client'),
-                        ),
-                        ..._clients.map((client) => DropdownMenuItem(
-                          value: client.id,
-                          child: Text(client.name),
-                        )).toList(),
-                      ],
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedClientId = value;
-                          // Reset project when client changes
-                          _selectedProjectId = null;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // Project dropdown - filtered by client if selected
-                    DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(
-                        labelText: 'Project',
-                        border: OutlineInputBorder(),
-                      ),
-                      value: _selectedProjectId,
-                      items: [
-                        const DropdownMenuItem(
-                          value: null,
-                          child: Text('No Project'),
-                        ),
-                        ..._projects
-                          .where((project) => _selectedClientId == null || 
-                            project.clientId == _selectedClientId)
-                          .map((project) => DropdownMenuItem(
-                            value: project.id,
-                            child: Text(project.title),
-                          )).toList(),
-                      ],
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedProjectId = value;
-                          
-                          // If no client is selected, set the client based on the project
-                          if (_selectedClientId == null && value != null) {
-                            final project = _projects.firstWhere(
-                              (p) => p.id == value,
-                              orElse: () => ProjectModel(
-                                title: '',
-                                clientId: '',
-                                clientName: '',
-                                hourlyRate: 0,
-                                startDate: DateTime.now(),
-                              ),
-                            );
-                            
-                            if (project.clientId != null && project.clientId!.isNotEmpty) {
-                              _selectedClientId = project.clientId;
-                            }
-                          }
-                          _tasksForSelectedProject = _getTasksForProject(value);
-                          _selectedTaskId = null;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // Task dropdown - filtered by selected project
-                    DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(
-                        labelText: 'Task',
-                        border: OutlineInputBorder(),
-                      ),
-                      value: _selectedTaskId,
-                      items: [                        const DropdownMenuItem<String>(
-                          value: null,
-                          child: Text('No Task'),
-                        ),
-                        ..._tasksForSelectedProject.map((task) => DropdownMenuItem<String>(
-                          value: task['id'],
-                          child: Text(task['title']),
-                        )).toList(),
-                      ],
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedTaskId = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: InkWell(
-                            onTap: () async {
-                              final time = await showTimePicker(
-                                context: context,
-                                initialTime: TimeOfDay.now(),
-                              );
-                              if (time != null) {
-                                setState(() {
-                                  _startTime = DateTime(
-                                    _selectedDate.year,
-                                    _selectedDate.month,
-                                    _selectedDate.day,
-                                    time.hour,
-                                    time.minute,
-                                  );
-                                });
-                              }
-                            },
-                            child: InputDecorator(
-                              decoration: const InputDecoration(
-                                labelText: 'Start Time',
-                                border: OutlineInputBorder(),
-                              ),
-                              child: Text(
-                                _startTime != null
-                                    ? DateFormat('HH:mm').format(_startTime!)
-                                    : 'Select time',
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: InkWell(
-                            onTap: () async {
-                              final time = await showTimePicker(
-                                context: context,
-                                initialTime: TimeOfDay.now(),
-                              );
-                              if (time != null) {
-                                setState(() {
-                                  _endTime = DateTime(
-                                    _selectedDate.year,
-                                    _selectedDate.month,
-                                    _selectedDate.day,
-                                    time.hour,
-                                    time.minute,
-                                  );
-                                });
-                              }
-                            },
-                            child: InputDecorator(
-                              decoration: const InputDecoration(
-                                labelText: 'End Time',
-                                border: OutlineInputBorder(),
-                              ),
-                              child: Text(
-                                _endTime != null
-                                    ? DateFormat('HH:mm').format(_endTime!)
-                                    : 'Select time',
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    CheckboxListTile(
-                      title: const Text('Billable'),
-                      value: _isBillable,
-                      onChanged: (value) {
-                        setState(() {
-                          _isBillable = value ?? true;
-                        });
-                      },
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('Cancel'),
-                        ),
-                        const SizedBox(width: 16),
-                        ElevatedButton(
-                          onPressed: _isSaving
-                              ? null
-                              : () {
-                                  _addTimeEntry().then((_) {
-                                    Navigator.of(context).pop();
-                                  });
-                                },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryColor,
-                            foregroundColor: Colors.white,
-                          ),
-                          child: _isSaving
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                  ),
-                                )
-                              : const Text('Save'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }
-      ),
-    );
-  }
-
-  // Get tasks for the selected project
-  List<Map<String, dynamic>> _getTasksForProject(String? projectId) {
-    if (projectId == null) return [];
-    
-    // Find the project with the matching ID
-    final project = _projects.firstWhere(
-      (p) => p.id == projectId, 
-      orElse: () => ProjectModel(title: '', hourlyRate: 0, startDate: DateTime.now())
-    );
-    
-    // Return todo items, filtering out completed ones
-    return project.todoItems
-        .where((task) => task['completed'] == false)
-        .toList();
-  }
-
-  // Get tasks for the selected project
   void _updateTasksForProject(String? projectId, StateSetter dialogSetState) {
     if (projectId == null) {
       dialogSetState(() {
@@ -765,18 +310,20 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
       });
       return;
     }
-    
-    // Find the project with the matching ID
     final project = _projects.firstWhere(
-      (p) => p.id == projectId, 
-      orElse: () => ProjectModel(title: '', hourlyRate: 0, startDate: DateTime.now())
+      (p) => p.id == projectId,
+      orElse:
+          () => ProjectModel(
+            id: '',
+            title: '',
+            clientId: '',
+            todoItems: [],
+            hourlyRate: 0,
+            startDate: DateTime.now(),
+          ),
     );
-    
-    // Get todo items, filtering out completed ones
-    final tasks = project.todoItems
-        .where((task) => task['completed'] == false)
-        .toList();
-        
+    final tasks =
+        project.todoItems.where((t) => !(t['completed'] ?? false)).toList();
     dialogSetState(() {
       _tasksForSelectedProject = tasks;
       _selectedTaskId = tasks.isNotEmpty ? tasks.first['id'] : null;
@@ -788,7 +335,9 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
       builder: (context, timerState, child) {
         return Card(
           elevation: 1,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -796,10 +345,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
               children: [
                 const Text(
                   'Timer',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 16),
                 timerState.isRunning
@@ -818,37 +364,38 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
     final seconds = duration.inSeconds.remainder(60);
-    final formattedTime = 
+    final formattedTime =
         '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
 
     // Find the project and client details
     String projectInfo = timerState.projectName ?? 'No Project';
     String clientInfo = timerState.clientName ?? 'No Client';
-    
+
     // Alleen project- en clientgegevens ophalen als ze nog niet zijn ingesteld
-    if (timerState.projectId != null && 
+    if (timerState.projectId != null &&
         (timerState.projectName == null || timerState.clientName == null)) {
       try {
         final project = _projects.firstWhere(
           (p) => p.id == timerState.projectId,
-          orElse: () => ProjectModel(
-            title: 'Unknown Project',
-            clientId: '',
-            clientName: '',
-            hourlyRate: 0,
-            startDate: DateTime.now(),
-          ),
+          orElse:
+              () => ProjectModel(
+                title: 'Unknown Project',
+                clientId: '',
+                clientName: '',
+                hourlyRate: 0,
+                startDate: DateTime.now(),
+              ),
         );
-        
+
         projectInfo = project.title;
-        
+
         // Client ophalen als clientId beschikbaar is
         if (project.clientId != null && project.clientId!.isNotEmpty) {
           final client = _clients.firstWhere(
             (c) => c.id == project.clientId,
             orElse: () => ClientModel(name: 'Unknown Client'),
           );
-          
+
           clientInfo = client.name;
         }
       } catch (e) {
@@ -872,11 +419,10 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            timerState.description.isEmpty ? 'Time is running...' : timerState.description,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            timerState.description.isEmpty
+                ? 'Time is running...'
+                : timerState.description,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Row(
@@ -917,18 +463,19 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
                         _startTime = timerState.startTime;
                         _endTime = DateTime.now();
                         _isBillable = timerState.isBillable;
-                        
+
                         // Get client ID from project if available
                         if (timerState.projectId != null) {
                           final project = _projects.firstWhere(
                             (p) => p.id == timerState.projectId,
-                            orElse: () => ProjectModel(
-                              title: '',
-                              clientId: '',
-                              clientName: '',
-                              hourlyRate: 0,
-                              startDate: DateTime.now(),
-                            ),
+                            orElse:
+                                () => ProjectModel(
+                                  title: '',
+                                  clientId: '',
+                                  clientName: '',
+                                  hourlyRate: 0,
+                                  startDate: DateTime.now(),
+                                ),
                           );
                           _selectedClientId = project.clientId;
                         }
@@ -974,21 +521,25 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
         Row(
           children: [
             Expanded(
-              child: DropdownButtonFormField<String>(
+              child: DropdownButtonFormField<String?>(
                 decoration: const InputDecoration(
                   labelText: 'Client',
                   border: OutlineInputBorder(),
                 ),
                 value: _selectedClientId,
                 items: [
-                  const DropdownMenuItem(
+                  const DropdownMenuItem<String?>(
                     value: null,
                     child: Text('No Client'),
                   ),
-                  ..._clients.map((client) => DropdownMenuItem(
-                    value: client.id,
-                    child: Text(client.name),
-                  )).toList(),
+                  ..._clients
+                      .map(
+                        (client) => DropdownMenuItem<String?>(
+                          value: client.id,
+                          child: Text(client.name),
+                        ),
+                      )
+                      .toList(),
                 ],
                 onChanged: (value) {
                   setState(() {
@@ -1001,50 +552,59 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
             ),
             const SizedBox(width: 16),
             Expanded(
-              child: DropdownButtonFormField<String>(
+              child: DropdownButtonFormField<String?>(
                 decoration: const InputDecoration(
                   labelText: 'Project',
                   border: OutlineInputBorder(),
                 ),
                 value: _selectedProjectId,
                 items: [
-                  const DropdownMenuItem(
+                  const DropdownMenuItem<String?>(
                     value: null,
                     child: Text('No Project'),
                   ),
                   ..._projects
-                    .where((project) => _selectedClientId == null || 
-                      project.clientId == _selectedClientId)
-                    .map((project) => DropdownMenuItem(
-                      value: project.id,
-                      child: Text(project.title),
-                    )).toList(),
-                ],                      onChanged: (value) {
-                        setState(() {
-                          _selectedProjectId = value;
-                          
-                          // If no client is selected, set the client based on the project
-                          if (_selectedClientId == null && value != null) {
-                            final project = _projects.firstWhere(
-                              (p) => p.id == value,
-                              orElse: () => ProjectModel(
-                                title: '',
-                                clientId: '',
-                                clientName: '',
-                                hourlyRate: 0,
-                                startDate: DateTime.now(),
-                              ),
-                            );
-                            
-                            if (project.clientId != null && project.clientId!.isNotEmpty) {
-                              _selectedClientId = project.clientId;
-                            }
-                          }
-                        });
-                        
-                        // Update available tasks when project changes
-                        _updateTasksForProject(value, setState);
-                      },
+                      .where(
+                        (project) =>
+                            _selectedClientId == null ||
+                            project.clientId == _selectedClientId,
+                      )
+                      .map(
+                        (project) => DropdownMenuItem<String?>(
+                          value: project.id,
+                          child: Text(project.title),
+                        ),
+                      )
+                      .toList(),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _selectedProjectId = value;
+
+                    // If no client is selected, set the client based on the project
+                    if (_selectedClientId == null && value != null) {
+                      final project = _projects.firstWhere(
+                        (p) => p.id == value,
+                        orElse:
+                            () => ProjectModel(
+                              title: '',
+                              clientId: '',
+                              clientName: '',
+                              hourlyRate: 0,
+                              startDate: DateTime.now(),
+                            ),
+                      );
+
+                      if (project.clientId != null &&
+                          project.clientId!.isNotEmpty) {
+                        _selectedClientId = project.clientId;
+                      }
+                    }
+                  });
+
+                  // Update available tasks when project changes
+                  _updateTasksForProject(value, setState);
+                },
               ),
             ),
           ],
@@ -1068,28 +628,31 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
                   onPressed: () {
                     if (_descriptionController.text.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Please enter a description')),
+                        const SnackBar(
+                          content: Text('Please enter a description'),
+                        ),
                       );
                       return;
                     }
 
                     String? projectName;
                     String? clientName;
-                    
+
                     if (_selectedProjectId != null) {
                       final project = _projects.firstWhere(
                         (p) => p.id == _selectedProjectId,
-                        orElse: () => ProjectModel(
-                          title: 'Unknown Project',
-                          clientId: '',
-                          clientName: '',
-                          hourlyRate: 0,
-                          startDate: DateTime.now(),
-                        ),
+                        orElse:
+                            () => ProjectModel(
+                              title: 'Unknown Project',
+                              clientId: '',
+                              clientName: '',
+                              hourlyRate: 0,
+                              startDate: DateTime.now(),
+                            ),
                       );
                       projectName = project.title;
                     }
-                    
+
                     if (_selectedClientId != null) {
                       final client = _clients.firstWhere(
                         (c) => c.id == _selectedClientId,
@@ -1106,15 +669,20 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
                       clientName: clientName,
                       isBillable: _isBillable,
                     );
-                    
-                    print('Timer started for: ${_descriptionController.text} , ProjectID: ${_selectedProjectId}, ClientID: ${_selectedClientId}');
+
+                    print(
+                      'Timer started for: ${_descriptionController.text} , ProjectID: ${_selectedProjectId}, ClientID: ${_selectedClientId}',
+                    );
                   },
                   icon: const Icon(Icons.play_arrow),
                   label: const Text('Start Timer'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryColor,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
                   ),
                 );
               },
@@ -1142,18 +710,27 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
           children: [
             const Text(
               'Time Summary',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildStatItem('Today', _formatDuration(_todayDuration), Colors.green),
-                _buildStatItem('This Week', _formatDuration(_weekDuration), Colors.blue),
-                _buildStatItem('This Month', _formatDuration(_monthDuration), Colors.purple),
+                _buildStatItem(
+                  'Today',
+                  _formatDuration(_todayDuration),
+                  Colors.green,
+                ),
+                _buildStatItem(
+                  'This Week',
+                  _formatDuration(_weekDuration),
+                  Colors.blue,
+                ),
+                _buildStatItem(
+                  'This Month',
+                  _formatDuration(_monthDuration),
+                  Colors.purple,
+                ),
               ],
             ),
           ],
@@ -1239,7 +816,9 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
                           icon: const Icon(Icons.arrow_back),
                           onPressed: () {
                             setState(() {
-                              _selectedDate = _selectedDate.subtract(const Duration(days: 1));
+                              _selectedDate = _selectedDate.subtract(
+                                const Duration(days: 1),
+                              );
                             });
                             _loadData();
                           },
@@ -1248,7 +827,9 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
                           icon: const Icon(Icons.arrow_forward),
                           onPressed: () {
                             setState(() {
-                              _selectedDate = _selectedDate.add(const Duration(days: 1));
+                              _selectedDate = _selectedDate.add(
+                                const Duration(days: 1),
+                              );
                             });
                             _loadData();
                           },
@@ -1267,7 +848,10 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
                           hintText: 'Search entries...',
                           prefixIcon: Icon(Icons.search),
                           border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                          contentPadding: EdgeInsets.symmetric(
+                            vertical: 10,
+                            horizontal: 16,
+                          ),
                         ),
                         onChanged: (value) {
                           setState(() {
@@ -1277,18 +861,22 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
                       ),
                     ),
                     const SizedBox(width: 16),
-                    DropdownButton<String>(
+                    DropdownButton<String?>(
                       hint: const Text('Filter by Client'),
                       value: _selectedClientFilter,
                       items: [
-                        const DropdownMenuItem<String>(
+                        const DropdownMenuItem<String?>(
                           value: null,
                           child: Text('All Clients'),
                         ),
-                        ..._clients.map((client) => DropdownMenuItem<String>(
-                          value: client.id,
-                          child: Text(client.name),
-                        )).toList(),
+                        ..._clients
+                            .map(
+                              (client) => DropdownMenuItem<String?>(
+                                value: client.id,
+                                child: Text(client.name),
+                              ),
+                            )
+                            .toList(),
                       ],
                       onChanged: (value) {
                         setState(() {
@@ -1299,21 +887,27 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
                       },
                     ),
                     const SizedBox(width: 16),
-                    DropdownButton<String>(
+                    DropdownButton<String?>(
                       hint: const Text('Filter by Project'),
                       value: _selectedProjectFilter,
                       items: [
-                        const DropdownMenuItem<String>(
+                        const DropdownMenuItem<String?>(
                           value: null,
                           child: Text('All Projects'),
                         ),
                         ..._projects
-                          .where((project) => _selectedClientFilter == null || 
-                            project.clientId == _selectedClientFilter)
-                          .map((project) => DropdownMenuItem<String>(
-                            value: project.id,
-                            child: Text(project.title),
-                          )).toList(),
+                            .where(
+                              (project) =>
+                                  _selectedClientFilter == null ||
+                                  project.clientId == _selectedClientFilter,
+                            )
+                            .map(
+                              (project) => DropdownMenuItem<String?>(
+                                value: project.id,
+                                child: Text(project.title),
+                              ),
+                            )
+                            .toList(),
                       ],
                       onChanged: (value) {
                         setState(() {
@@ -1330,20 +924,13 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
           TabBar(
             controller: _tabController,
             labelColor: primaryColor,
-            tabs: const [
-              Tab(text: 'List View'),
-              Tab(text: 'Calendar View'),
-            ],
+            tabs: const [Tab(text: 'List View'), Tab(text: 'Calendar View')],
           ),
-          Container(
-            height: 400, // Fixed height for the tab content
-            padding: const EdgeInsets.all(16),
+          SizedBox(
+            height: 500, // Fixed height instead of Expanded
             child: TabBarView(
               controller: _tabController,
-              children: [
-                _buildTimeEntriesList(),
-                _buildTimeEntriesCalendar(),
-              ],
+              children: [_buildTimeEntriesList(), _buildTimeEntriesCalendar()],
             ),
           ),
         ],
@@ -1357,110 +944,444 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
     } else if (_errorMessage != null) {
       return Center(child: Text(_errorMessage!));
     } else if (_timeEntries.isEmpty) {
+      return const Center(child: Text('Geen tijdregistraties gevonden.'));
+    }
+    List<TimeEntryModel> filteredEntries = _timeEntries;
+    if (_selectedClientFilter != null) {
+      filteredEntries =
+          filteredEntries
+              .where((e) => e.clientId == _selectedClientFilter)
+              .toList();
+    }
+    if (_selectedProjectFilter != null) {
+      filteredEntries =
+          filteredEntries
+              .where((e) => e.projectId == _selectedProjectFilter)
+              .toList();
+    }
+    final searchQuery = _searchController.text.toLowerCase();
+    if (searchQuery.isNotEmpty) {
+      filteredEntries =
+          filteredEntries
+              .where(
+                (e) =>
+                    e.description.toLowerCase().contains(searchQuery) ||
+                    (e.projectName?.toLowerCase().contains(searchQuery) ??
+                        false) ||
+                    (e.clientName?.toLowerCase().contains(searchQuery) ??
+                        false),
+              )
+              .toList();
+    }
+    if (filteredEntries.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.hourglass_empty, size: 60, color: Colors.grey[400]),
+            Icon(Icons.timer_off, size: 60, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
-              'No time entries for ${DateFormat('MMM d, y').format(_selectedDate)}',
+              'No time entries match your filters',
               style: TextStyle(color: Colors.grey[600]),
             ),
           ],
         ),
       );
     }
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: ListView.builder(
+        itemCount: filteredEntries.length,
+        itemBuilder: (context, index) {
+          final entry = filteredEntries[index];
+          final duration = Duration(seconds: entry.duration.toInt());
+          final hours = duration.inHours;
+          final minutes = duration.inMinutes % 60;
 
-    // Apply filters
-    List<TimeEntryModel> filteredEntries = _timeEntries;
+          return Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: Color.fromRGBO(
+                  (primaryColor.r * 255.0).round() & 0xff,
+                  (primaryColor.g * 255.0).round() & 0xff,
+                  (primaryColor.b * 255.0).round() & 0xff,
+                  0.2
+                ),
+                child: Icon(Icons.access_time, color: primaryColor),
+              ),
+              title: Text(
+                entry.description,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today,
+                        size: 14,
+                        color: Colors.grey[600],
+                      ),
+                      const SizedBox(width: 4),
+                      Text(DateFormat('MMM d, y').format(entry.startTime)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.business, size: 14, color: Colors.grey[600]),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          entry.clientName ?? 'No client',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(Icons.folder, size: 14, color: Colors.grey[600]),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          entry.projectName ?? 'No project',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              trailing: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '$hours:${minutes.toString().padLeft(2, '0')}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  if (entry.billable)
+                    Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.green[100],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'Billable',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              onTap: () {
+                // Option to edit the entry
+              },
+              onLongPress: () {
+                _showDeleteConfirmation(entry);
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
 
-    // Apply client filter
-    if (_selectedClientFilter != null) {
-      filteredEntries = filteredEntries
-        .where((entry) => entry.clientId == _selectedClientFilter)
-        .toList();
+  void _showDeleteConfirmation(TimeEntryModel entry) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Confirm Delete'),
+            content: Text(
+              'Are you sure you want to delete "${entry.description}"?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _deleteTimeEntry(entry.id);
+                },
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Widget _buildTimeEntriesCalendar() {
+    // Group time entries by date for the calendar
+    Map<DateTime, List<TimeEntryModel>> groupedEntries = {};
+
+    for (var entry in _timeEntries) {
+      // Apply the same filters as the list view
+      if (_selectedClientFilter != null &&
+          entry.clientId != _selectedClientFilter) {
+        continue;
+      }
+      if (_selectedProjectFilter != null &&
+          entry.projectId != _selectedProjectFilter) {
+        continue;
+      }
+      final searchQuery = _searchController.text.toLowerCase();
+      if (searchQuery.isNotEmpty &&
+          !entry.description.toLowerCase().contains(searchQuery) &&
+          !(entry.projectName?.toLowerCase().contains(searchQuery) ?? false) &&
+          !(entry.clientName?.toLowerCase().contains(searchQuery) ?? false)) {
+        continue;
+      }
+
+      // Convert to date only (no time)
+      final entryDate = DateTime(
+        entry.startTime.year,
+        entry.startTime.month,
+        entry.startTime.day,
+      );
+
+      if (groupedEntries[entryDate] == null) {
+        groupedEntries[entryDate] = [];
+      }
+      groupedEntries[entryDate]!.add(entry);
     }
 
-    // Apply project filter
-    if (_selectedProjectFilter != null) {
-      filteredEntries = filteredEntries
-        .where((entry) => entry.projectId == _selectedProjectFilter)
-        .toList();
+    // Get the total duration for each day
+    Map<DateTime, Duration> dailyDurations = {};
+    groupedEntries.forEach((date, entries) {
+      final totalSeconds = entries.fold<double>(
+        0,
+        (sum, entry) => sum + entry.duration,
+      );
+      dailyDurations[date] = Duration(seconds: totalSeconds.toInt());
+    });
+
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
     }
 
-    // Apply search filter
-    final searchQuery = _searchController.text.toLowerCase();
-    if (searchQuery.isNotEmpty) {
-      filteredEntries = filteredEntries
-        .where((entry) => 
-          entry.description.toLowerCase().contains(searchQuery) ||
-          (entry.projectName?.toLowerCase().contains(searchQuery) ?? false) ||
-          (entry.clientName?.toLowerCase().contains(searchQuery) ?? false)
-        )
-        .toList();
-    }
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: Column(
+        children: [
+          TableCalendar(
+            firstDay: DateTime.now().subtract(const Duration(days: 365)),
+            lastDay: DateTime.now().add(const Duration(days: 365)),
+            focusedDay: _selectedDate,
+            calendarFormat: CalendarFormat.month,
+            startingDayOfWeek: StartingDayOfWeek.monday,
+            rowHeight: 45, // Reduce row height to save space
+            daysOfWeekHeight: 20, // Reduce height of days of week header
+            headerStyle: HeaderStyle(
+              formatButtonVisible: false,
+              titleCentered: true,
+              titleTextStyle: TextStyle(
+                color: primaryColor,
+                fontSize: 16, // Smaller font size
+                fontWeight: FontWeight.bold,
+              ),
+              headerPadding: const EdgeInsets.symmetric(
+                vertical: 8.0,
+              ), // Reduce padding
+              leftChevronPadding: const EdgeInsets.all(4.0),
+              rightChevronPadding: const EdgeInsets.all(4.0),
+            ),
+            calendarStyle: CalendarStyle(
+              outsideDaysVisible: true,
+              markersMaxCount: 3,
+              markerDecoration: const BoxDecoration(
+                color: Colors.blue,
+                shape: BoxShape.circle,
+              ),
+              todayDecoration: BoxDecoration(
+                color: Color.fromRGBO(
+                  (primaryColor.r * 255.0).round() & 0xff,
+                  (primaryColor.g * 255.0).round() & 0xff,
+                  (primaryColor.b * 255.0).round() & 0xff,
+                  0.3,
+                ),
+                shape: BoxShape.circle,
+              ),
+              selectedDecoration: BoxDecoration(
+                color: primaryColor,
+                shape: BoxShape.circle,
+              ),
+              // Reduce cell margins
+              cellMargin: const EdgeInsets.all(2),
+              // Smaller text for day numbers
+              defaultTextStyle: const TextStyle(fontSize: 12),
+              weekendTextStyle: const TextStyle(fontSize: 12),
+              outsideTextStyle: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[400],
+              ),
+              selectedTextStyle: const TextStyle(
+                fontSize: 12,
+                color: Colors.white,
+              ),
+              todayTextStyle: const TextStyle(
+                fontSize: 12,
+                color: Colors.black,
+              ),
+            ),
+            selectedDayPredicate: (day) {
+              return isSameDay(_selectedDate, day);
+            },
+            onDaySelected: (selectedDay, focusedDay) {
+              setState(() {
+                _selectedDate = selectedDay;
+              });
+              _loadData();
+            },
+            eventLoader: (day) {
+              // Return events for this day
+              return groupedEntries[DateTime(day.year, day.month, day.day)] ??
+                  [];
+            },
+            calendarBuilders: CalendarBuilders(
+              markerBuilder: (context, date, events) {
+                if (events.isEmpty) return null;
 
-    if (filteredEntries.isEmpty) {
+                final duration =
+                    dailyDurations[DateTime(date.year, date.month, date.day)] ??
+                    Duration.zero;
+                final hours = duration.inHours;
+                final minutes = duration.inMinutes % 60;
+
+                // Show a badge with the total hours for the day
+                return Positioned(
+                  bottom: 1,
+                  right: 1,
+                  child: Container(
+                    padding: const EdgeInsets.all(1),
+                    decoration: BoxDecoration(
+                      color: primaryColor,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$hours:${minutes.toString().padLeft(2, '0')}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Show entries for the selected day
+          Expanded(
+            child: _buildSelectedDayEntries(
+              groupedEntries[_selectedDate] ?? [],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectedDayEntries(List<TimeEntryModel> entries) {
+    if (entries.isEmpty) {
       return Center(
-        child: Text(
-          'No entries match your filters',
-          style: TextStyle(color: Colors.grey[600]),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.event_busy, size: 48, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'No time entries for ${DateFormat('MMMM d, y').format(_selectedDate)}',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _showAddTimeEntryModal,
+              icon: const Icon(Icons.add),
+              label: const Text('Add Time Entry'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
         ),
       );
     }
 
+    // Sort entries by start time
+    entries.sort((a, b) => a.startTime.compareTo(b.startTime));
+
     return ListView.builder(
-      itemCount: filteredEntries.length,
+      itemCount: entries.length,
       itemBuilder: (context, index) {
-        final entry = filteredEntries[index];
+        final entry = entries[index];
         final duration = Duration(seconds: entry.duration.toInt());
         final hours = duration.inHours;
-        final minutes = duration.inMinutes.remainder(60);
-        final durationStr = '$hours:${minutes.toString().padLeft(2, '0')}';
-        
+        final minutes = duration.inMinutes % 60;
+
         return Card(
-          elevation: 0.5,
           margin: const EdgeInsets.only(bottom: 8),
           child: ListTile(
-            title: Text(entry.description),
+            leading: CircleAvatar(
+              backgroundColor: Color.fromRGBO(
+                (primaryColor.r * 255.0).round() & 0xff,
+                (primaryColor.g * 255.0).round() & 0xff,
+                (primaryColor.b * 255.0).round() & 0xff,
+                0.2
+              ),
+              child: Icon(Icons.access_time, color: primaryColor),
+            ),
+            title: Text(
+              entry.description,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    if (entry.clientName != null && entry.clientName!.isNotEmpty)
-                      Chip(
-                        backgroundColor: Colors.amber.shade100,
-                        labelStyle: const TextStyle(fontSize: 12),
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
-                        label: Text(entry.clientName!),
-                      ),
-                    const SizedBox(width: 8),
-                    if (entry.projectName != null && entry.projectName!.isNotEmpty)
-                      Chip(
-                        backgroundColor: Colors.blue.shade100,
-                        labelStyle: const TextStyle(fontSize: 12),
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
-                        label: Text(entry.projectName!),
-                      ),
-                    if (entry.billable)
-                      const Padding(
-                        padding: EdgeInsets.only(left: 8),
-                        child: Icon(Icons.attach_money, size: 16, color: Colors.green),
-                      ),
+                    Icon(Icons.business, size: 14, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Text(entry.clientName ?? 'No client'),
+                    const SizedBox(width: 16),
+                    Icon(Icons.folder, size: 14, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Text(entry.projectName ?? 'No project'),
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  '${DateFormat('HH:mm').format(entry.startTime)} - ' + 
-                  (entry.endTime != null 
-                    ? DateFormat('HH:mm').format(entry.endTime!) 
-                    : 'now'),
-                  style: TextStyle(color: Colors.grey[700]),
+                Row(
+                  children: [
+                    Icon(Icons.schedule, size: 14, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${DateFormat('HH:mm').format(entry.startTime)} - ${entry.endTime != null ? DateFormat('HH:mm').format(entry.endTime!) : 'ongoing'}',
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -1469,63 +1390,304 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  durationStr,
+                  '$hours:${minutes.toString().padLeft(2, '0')}',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 18,
+                    fontSize: 16,
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.delete, size: 20),
-                  color: Colors.red,
-                  onPressed: () => _showDeleteConfirmation(entry),
-                ),
+                if (entry.billable)
+                  Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.green[100],
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'Billable',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
               ],
             ),
+            onTap: () {
+              // Option to edit the entry
+            },
+            onLongPress: () {
+              _showDeleteConfirmation(entry);
+            },
           ),
         );
       },
     );
   }
 
-  void _showDeleteConfirmation(TimeEntryModel entry) {
+  void _showAddTimeEntryModal() {
+    // Reset form state
+    _descriptionController.clear();
+    setState(() {
+      _selectedProjectId = null;
+      _selectedClientId = null;
+      _selectedTaskId = null;
+      _tasksForSelectedProject = [];
+      _startTime = DateTime.now().subtract(const Duration(hours: 1));
+      _endTime = DateTime.now();
+      _isBillable = true;
+      _errorMessage = null;
+    });
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirm Delete'),
-        content: Text('Are you sure you want to delete "${entry.description}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _deleteTimeEntry(entry.id);
-            },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimeEntriesCalendar() {
-    // Simple placeholder for calendar view - would be replaced with actual calendar widget
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.calendar_view_month, size: 60, color: Colors.grey[400]),
-          const SizedBox(height: 16),
-          Text(
-            'Calendar view coming soon',
-            style: TextStyle(color: Colors.grey[600]),
-          ),
-        ],
-      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, dialogSetState) {
+            return AlertDialog(
+              title: const Text('Add Time Entry'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_errorMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16.0),
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    TextFormField(
+                      controller: _descriptionController,
+                      decoration: const InputDecoration(
+                        labelText: 'Description',
+                        border: OutlineInputBorder(),
+                        hintText: 'What did you work on?',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String?>(
+                            decoration: const InputDecoration(
+                              labelText: 'Client',
+                              border: OutlineInputBorder(),
+                            ),
+                            value: _selectedClientId,
+                            items: [
+                              const DropdownMenuItem<String?>(
+                                value: null,
+                                child: Text('No Client'),
+                              ),
+                              ..._clients
+                                  .map(
+                                    (client) => DropdownMenuItem<String?>(
+                                      value: client.id,
+                                      child: Text(client.name),
+                                    ),
+                                  )
+                                  .toList(),
+                            ],
+                            onChanged: (value) {
+                              dialogSetState(() {
+                                _selectedClientId = value;
+                                // Reset project when client changes
+                                _selectedProjectId = null;
+                                _selectedTaskId = null;
+                                _tasksForSelectedProject = [];
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String?>(
+                      decoration: const InputDecoration(
+                        labelText: 'Project',
+                        border: OutlineInputBorder(),
+                      ),
+                      value: _selectedProjectId,
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('No Project'),
+                        ),
+                        ..._projects
+                            .where(
+                              (project) =>
+                                  _selectedClientId == null ||
+                                  project.clientId == _selectedClientId,
+                            )
+                            .map(
+                              (project) => DropdownMenuItem<String?>(
+                                value: project.id,
+                                child: Text(project.title),
+                              ),
+                            )
+                            .toList(),
+                      ],
+                      onChanged: (value) {
+                        dialogSetState(() {
+                          _selectedProjectId = value;
+                          // Update available tasks                          _updateTasksForProject(value, dialogSetState);
+                        });
+                      },
+                    ),
+                    if (_tasksForSelectedProject.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String?>(
+                        decoration: const InputDecoration(
+                          labelText: 'Task',
+                          border: OutlineInputBorder(),
+                        ),
+                        value: _selectedTaskId,
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('No Task'),
+                          ),
+                          ..._tasksForSelectedProject
+                              .map(
+                                (task) => DropdownMenuItem<String?>(
+                                  value: task['id'],
+                                  child: Text(task['title']),
+                                ),
+                              )
+                              .toList(),
+                        ],
+                        onChanged: (value) {
+                          dialogSetState(() {
+                            _selectedTaskId = value;
+                          });
+                        },
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            readOnly: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Start Time',
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.access_time),
+                            ),
+                            controller: TextEditingController(
+                              text:
+                                  _startTime != null
+                                      ? DateFormat('HH:mm').format(_startTime!)
+                                      : '',
+                            ),
+                            onTap: () async {
+                              final time = await showTimePicker(
+                                context: context,
+                                initialTime:
+                                    _startTime != null
+                                        ? TimeOfDay.fromDateTime(_startTime!)
+                                        : TimeOfDay.now(),
+                              );
+                              if (time != null) {
+                                dialogSetState(() {
+                                  _startTime = DateTime(
+                                    _selectedDate.year,
+                                    _selectedDate.month,
+                                    _selectedDate.day,
+                                    time.hour,
+                                    time.minute,
+                                  );
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextFormField(
+                            readOnly: true,
+                            decoration: const InputDecoration(
+                              labelText: 'End Time',
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.access_time),
+                            ),
+                            controller: TextEditingController(
+                              text:
+                                  _endTime != null
+                                      ? DateFormat('HH:mm').format(_endTime!)
+                                      : '',
+                            ),
+                            onTap: () async {
+                              final time = await showTimePicker(
+                                context: context,
+                                initialTime:
+                                    _endTime != null
+                                        ? TimeOfDay.fromDateTime(_endTime!)
+                                        : TimeOfDay.now(),
+                              );
+                              if (time != null) {
+                                dialogSetState(() {
+                                  _endTime = DateTime(
+                                    _selectedDate.year,
+                                    _selectedDate.month,
+                                    _selectedDate.day,
+                                    time.hour,
+                                    time.minute,
+                                  );
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: _isBillable,
+                          onChanged: (value) {
+                            dialogSetState(() {
+                              _isBillable = value ?? true;
+                            });
+                          },
+                        ),
+                        const Text('Billable'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Cancel'),
+                ),
+                _isSaving
+                    ? const CircularProgressIndicator()
+                    : ElevatedButton(
+                      onPressed: _addTimeEntry,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('Save'),
+                    ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1547,11 +1709,16 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
                   break;
                 default:
                   setState(() => _selectedIndex = index);
-                  if (index == 2) Navigator.pushReplacementNamed(context, '/invoices');
-                  if (index == 3) Navigator.pushReplacementNamed(context, '/clients');
-                  if (index == 4) Navigator.pushReplacementNamed(context, '/reports');
-                  if (index == 5) Navigator.pushReplacementNamed(context, '/settings');
-                  if (index == 6) Navigator.pushReplacementNamed(context, '/projects');
+                  if (index == 2)
+                    Navigator.pushReplacementNamed(context, '/invoices');
+                  if (index == 3)
+                    Navigator.pushReplacementNamed(context, '/clients');
+                  if (index == 4)
+                    Navigator.pushReplacementNamed(context, '/reports');
+                  if (index == 5)
+                    Navigator.pushReplacementNamed(context, '/settings');
+                  if (index == 6)
+                    Navigator.pushReplacementNamed(context, '/projects');
               }
             },
           ),
@@ -1587,15 +1754,15 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> with SingleTickerPr
                       ],
                     ),
                     const SizedBox(height: 24),
-                    
+
                     // Stats section
                     _buildStatsCard(),
                     const SizedBox(height: 24),
-                    
+
                     // Timer section
                     _buildTimerSection(),
                     const SizedBox(height: 24),
-                    
+
                     // Time entries section
                     _buildTimeEntriesSection(),
                   ],

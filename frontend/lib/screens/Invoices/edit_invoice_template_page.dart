@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../services/invoice_export_service.dart';
 
 class EditInvoiceTemplatePage extends StatefulWidget {
   const EditInvoiceTemplatePage({Key? key}) : super(key: key);
@@ -182,15 +181,17 @@ class _EditInvoiceTemplatePageState extends State<EditInvoiceTemplatePage> {
         margin: const EdgeInsets.symmetric(vertical: 24),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.10),
+          borderRadius: BorderRadius.circular(20),          boxShadow: [            BoxShadow(
+              color: Color.fromRGBO(0, 0, 0, 0.10),
               blurRadius: 24,
               offset: const Offset(0, 8),
             ),
-          ],
-          border: Border.all(color: parsedColor.withOpacity(0.25), width: 2),
+          ],          border: Border.all(color: Color.fromRGBO(
+            (parsedColor.r * 255.0).round() & 0xff,
+            (parsedColor.g * 255.0).round() & 0xff,
+            (parsedColor.b * 255.0).round() & 0xff,
+            0.25
+          ), width: 2),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -198,8 +199,12 @@ class _EditInvoiceTemplatePageState extends State<EditInvoiceTemplatePage> {
             // Header
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 28),
-              decoration: BoxDecoration(
-                color: parsedColor.withOpacity(0.13),
+              decoration: BoxDecoration(                color: Color.fromRGBO(
+                  (parsedColor.r * 255.0).round() & 0xff,
+                  (parsedColor.g * 255.0).round() & 0xff,
+                  (parsedColor.b * 255.0).round() & 0xff,
+                  0.13
+                ),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Row(
@@ -277,8 +282,12 @@ class _EditInvoiceTemplatePageState extends State<EditInvoiceTemplatePage> {
                   3: FlexColumnWidth(1.5),
                 },
                 children: [
-                  TableRow(
-                    decoration: BoxDecoration(color: parsedColor.withOpacity(0.08)),
+                  TableRow(                    decoration: BoxDecoration(color: Color.fromRGBO(
+                      (parsedColor.r * 255.0).round() & 0xff,
+                      (parsedColor.g * 255.0).round() & 0xff,
+                      (parsedColor.b * 255.0).round() & 0xff,
+                      0.08
+                    )),
                     children: const [
                       Padding(
                         padding: EdgeInsets.all(10),
@@ -359,9 +368,13 @@ class _EditInvoiceTemplatePageState extends State<EditInvoiceTemplatePage> {
             // Footer
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 22),
-              decoration: BoxDecoration(
-                color: parsedColor.withOpacity(0.10),
+              padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 22),              decoration: BoxDecoration(
+                color: Color.fromRGBO(
+                  (parsedColor.r * 255.0).round() & 0xff,
+                  (parsedColor.g * 255.0).round() & 0xff,
+                  (parsedColor.b * 255.0).round() & 0xff,
+                  0.10
+                ),
                 borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
               ),
               child: Text(
