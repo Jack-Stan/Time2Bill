@@ -1,5 +1,4 @@
 import 'dart:typed_data';
-
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -18,34 +17,42 @@ class PdfService {
   }) async {
     // Create a PDF document
     final pdf = pw.Document();
-    // Gebruik standaard font in plaats van aangepast font omdat we het OpenSans font niet in de assets hebben
-    // In een productieomgeving zou je dit kunnen toevoegen
-    final ttf = pw.Font.helvetica();
+    
+    // Load fonts
+    final robotoData = await rootBundle.load("assets/fonts/Roboto-Regular.ttf");
+    final roboto = pw.Font.ttf(robotoData);
+    
+    // Create font fallback to ensure all symbols are rendered
+    final fontFallback = await Future.wait([
+      rootBundle.load("assets/fonts/Roboto-Regular.ttf").then((data) => pw.Font.ttf(data)),
+      // Add additional fonts here if needed for specific symbols
+    ]);
 
-    // Define styles
-    final headerStyle = pw.TextStyle(
-      font: ttf,
+    // Define styles with font fallback
+    final baseStyle = pw.TextStyle(
+      font: roboto,
+      fontSize: 12,
+      fontFallback: fontFallback,
+    );
+
+    final headerStyle = baseStyle.copyWith(
       fontSize: 18,
       fontWeight: pw.FontWeight.bold,
     );
 
-    final subheaderStyle = pw.TextStyle(
-      font: ttf,
+    final subheaderStyle = baseStyle.copyWith(
       fontSize: 14,
       fontWeight: pw.FontWeight.bold,
     );
 
-    final bodyStyle = pw.TextStyle(
-      font: ttf,
-      fontSize: 12,
-    );
+    final bodyStyle = baseStyle;
 
-    final smallStyle = pw.TextStyle(
-      font: ttf,
+    final smallStyle = baseStyle.copyWith(
       fontSize: 10,
       color: PdfColors.grey700,
     );
 
+    // Use Euro symbol directly in formatters
     final dateFormat = DateFormat('dd/MM/yyyy');
     final moneyFormat = NumberFormat.currency(
       locale: 'nl_NL',

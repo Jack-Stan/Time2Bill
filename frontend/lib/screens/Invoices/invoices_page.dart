@@ -7,7 +7,9 @@ import 'widgets/invoice_filter_dialog.dart';
 import 'widgets/new_invoice_form.dart';
 import 'widgets/recurring_invoice_form.dart';
 import 'widgets/recurring_invoice_list.dart';
+import 'widgets/invoice_email_template_form.dart';
 import '../../services/invoice_export_service.dart';
+import '../../services/firebase_service.dart';
 
 class InvoicesPage extends StatefulWidget {
   const InvoicesPage({super.key});
@@ -38,6 +40,7 @@ class _InvoicesPageState extends State<InvoicesPage> with SingleTickerProviderSt
 
   // PDF en Peppol-integratie functies
   final InvoiceExportService _invoiceExportService = InvoiceExportService();
+  final FirebaseService _firebaseService = FirebaseService();
 
   @override
   void initState() {
@@ -481,15 +484,40 @@ class _InvoicesPageState extends State<InvoicesPage> with SingleTickerProviderSt
           ),
         ),
         Row(
-          children: [
+          children: [            // Invoice Layout Template Button
             ElevatedButton.icon(
               onPressed: () {
                 Navigator.pushNamed(context, '/edit-invoice-template');
               },
               icon: const Icon(Icons.design_services),
-              label: const Text('Sjabloon bewerken'),
+              label: const Text('Layout Template'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+            const SizedBox(width: 16),
+            // Email Template Button 
+            ElevatedButton.icon(
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => Dialog(
+                    child: Container(
+                      width: 800,
+                      child: const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: InvoiceEmailTemplateForm(),
+                      ),
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.email),
+              label: const Text('Email Template'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
@@ -1024,15 +1052,40 @@ class _InvoicesPageState extends State<InvoicesPage> with SingleTickerProviderSt
                   ElevatedButton.icon(
                     onPressed: () {
                       Navigator.of(context).pop();
-                      _markInvoiceAsPaid(invoice['id']);
+                      _resendInvoiceEmail(invoice['id']);
                     },
-                    icon: const Icon(Icons.check_circle, size: 16),
-                    label: const Text('Mark as Paid'),
+                    icon: const Icon(Icons.email, size: 16),
+                    label: const Text('Resend Email'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
+                      backgroundColor: Colors.teal,
                       foregroundColor: Colors.white,
                     ),
                   ),
+                  if (status != 'paid')                  ElevatedButton.icon(
+                    onPressed: status != 'draft' ? () {
+                      Navigator.of(context).pop();
+                      _resendInvoiceEmail(invoice['id']);
+                    } : null,
+                    icon: const Icon(Icons.email, size: 16),
+                    label: const Text('Resend Email'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                  if (status != 'paid')
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        _markInvoiceAsPaid(invoice['id']);
+                      },
+                      icon: const Icon(Icons.check_circle, size: 16),
+                      label: const Text('Mark as Paid'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
                   ElevatedButton.icon(
                     onPressed: () {
                       Navigator.of(context).pop();
@@ -1042,6 +1095,18 @@ class _InvoicesPageState extends State<InvoicesPage> with SingleTickerProviderSt
                     label: const Text('Edit'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _showDeleteConfirmation(invoice['id']);
+                    },
+                    icon: const Icon(Icons.delete, size: 16),
+                    label: const Text('Delete'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
                       foregroundColor: Colors.white,
                     ),
                   ),
@@ -1058,6 +1123,35 @@ class _InvoicesPageState extends State<InvoicesPage> with SingleTickerProviderSt
         ],
       ),
     );
+  }
+
+  Future<void> _resendInvoiceEmail(String invoiceId) async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+      
+      await _firebaseService.sendInvoicePdfWithCloudFunction(invoiceId: invoiceId);
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('De factuur is opnieuw verzonden')),
+      );
+      
+      // Refresh invoices to update status
+      _fetchInvoices();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Fout bij verzenden factuur: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   Widget _buildDetailRow(String label, String value) {

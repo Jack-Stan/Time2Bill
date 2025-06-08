@@ -57,6 +57,7 @@ class _ProfileSettingsCardState extends State<ProfileSettingsCard> {
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
     
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -69,27 +70,14 @@ class _ProfileSettingsCardState extends State<ProfileSettingsCard> {
         'email': _emailController.text,
         'phone': _phoneController.text,
       };
+        await widget.onSave(settings);
       
-      await widget.onSave(settings);
-      
-      // Update Firebase Auth email if it changed
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null && user.email != _emailController.text) {
-        // Replace deprecated updateEmail with verifyBeforeUpdateEmail
-        await user.verifyBeforeUpdateEmail(_emailController.text);
-        
-        // Show message to user that verification email was sent
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Verification email sent. Please check your inbox to confirm email change.')),
-          );
-        }
-      }
-      
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
     } catch (error) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _errorMessage = error.toString();

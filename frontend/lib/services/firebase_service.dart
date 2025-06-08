@@ -1,14 +1,126 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:intl/intl.dart';
 import '../models/business_details.dart';
 import '../models/client_model.dart';
 import '../models/project_model.dart';
 import '../models/invoice_model.dart';
 import '../models/time_entry_model.dart';
+import '../models/email_settings.dart';
+import 'pdf_service.dart';
 
 class FirebaseService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final PdfService _pdfService = PdfService();
+  
+  // Base URL for API calls - adjust this based on your deployment
+  final String _baseUrl = 'http://localhost:3000/api';  // For local development
+
+  // Method to send invoice email
+  Future<bool> sendInvoiceEmail({
+    required InvoiceModel invoice,
+    required String recipientEmail,
+    String? customMessage,
+  }) async {
+    try {
+      final User? user = _auth.currentUser;
+      if (user == null) {
+        throw Exception('User not authenticated');
+      }
+      
+      // Get business details for PDF generation
+      final businessDetails = await getBusinessDetails();
+      
+      // Generate PDF and encode to base64
+      final pdfBytes = await _pdfService.generateInvoicePdf(
+        invoice: invoice,
+        businessDetails: businessDetails,
+      );
+      final pdfBase64 = base64Encode(pdfBytes);
+      final fileName = 'factuur_${invoice.invoiceNumber}.pdf';
+      
+      // Send email with proper error handling
+      final response = await http.post(
+        Uri.parse('$_baseUrl/send-invoice-email'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${await user.getIdToken()}'
+        },
+        body: jsonEncode({
+          'invoiceId': invoice.id,
+          'recipientEmail': recipientEmail,
+          'subject': 'Invoice ${invoice.invoiceNumber} from ${businessDetails.companyName}',
+          'message': customMessage ?? 'Please find your invoice attached.',
+          'attachment': {
+            'content': pdfBase64,
+            'filename': fileName,
+            'contentType': 'application/pdf'
+          }
+        }),
+      );
+      
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        // Update invoice status to sent
+        await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('invoices')
+            .doc(invoice.id)
+            .update({
+          'status': 'sent',
+          'sentAt': FieldValue.serverTimestamp(),
+        });
+        return true;
+      } else {
+        throw Exception('Failed to send email: ${response.body}');
+      }
+    } catch (e) {
+      print('Error sending invoice email: $e');
+      return false; // Return false on error
+    }
+  }
+    // Get business details from Firestore
+  Future<BusinessDetails> getBusinessDetails() async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('User not authenticated');
+    
+    final doc = await _firestore
+        .collection('users')
+        .doc(user.uid)
+        .get();
+    
+    if (!doc.exists) {
+      return BusinessDetails(
+        companyName: '',
+        kboNumber: '',
+        vatNumber: '',
+        address: '',
+        legalForm: '',
+        iban: '',
+        defaultVatRate: 21,
+        paymentTerms: 30,
+      );
+    }
+    
+    final data = doc.data() as Map<String, dynamic>;
+    
+    return BusinessDetails(
+      companyName: data['businessName'] ?? '',
+      kboNumber: data['kboNumber'] ?? '',
+      vatNumber: data['vatNumber'] ?? '',
+      address: data['address'] ?? '',
+      legalForm: data['legalForm'] ?? '',
+      iban: data['iban'] ?? '',
+      defaultVatRate: data['defaultVatRate'] ?? 21,
+      paymentTerms: data['paymentTerms'] ?? 30,
+      peppolId: data['peppolId'],
+      phone: data['phone'],
+      website: data['website'],
+    );
+  }
 
   // Authentication methods
   Future<UserCredential> registerUser({
@@ -159,7 +271,6 @@ class FirebaseService {
       return false;
     }
   }
-
   Future<void> updateBusinessDetails(
     String userId, 
     BusinessDetails businessDetails
@@ -173,37 +284,11 @@ class FirebaseService {
       'peppolId': businessDetails.peppolId,
       'phone': businessDetails.phone,
       'website': businessDetails.website,
+      'kboNumber': businessDetails.kboNumber,
+      'legalForm': businessDetails.legalForm,
+      'iban': businessDetails.iban,
       'updatedAt': FieldValue.serverTimestamp(),
     });
-  }
-
-  /// Get business details for the current logged in user
-  Future<BusinessDetails> getBusinessDetails() async {
-    final user = _auth.currentUser;
-    if (user == null) {
-      throw Exception('No user is currently logged in');
-    }
-    
-    final doc = await _firestore.collection('users').doc(user.uid).get();
-    if (!doc.exists) {
-      throw Exception('User document does not exist');
-    }
-    
-    final data = doc.data()!;
-    
-    return BusinessDetails(
-      companyName: data['businessName'] ?? '',
-      kboNumber: data['kboNumber'] ?? '',
-      vatNumber: data['vatNumber'] ?? '',
-      address: data['address'] ?? '',
-      legalForm: data['legalForm'] ?? '',
-      iban: data['iban'] ?? '',
-      defaultVatRate: data['defaultVatRate'] ?? 21,
-      paymentTerms: data['paymentTerms'] ?? 30,
-      peppolId: data['peppolId'],
-      phone: data['phone'],
-      website: data['website'],
-    );
   }
 
   // Clients methods
@@ -608,7 +693,8 @@ class FirebaseService {
         .collection('users')
         .doc(user.uid)
         .collection('timeTracking')
-        .doc(entryId)
+        .doc(entryId
+        )
         .get();
 
     if (!doc.exists) {
@@ -681,6 +767,51 @@ class FirebaseService {
     await projectRef.update({'todoItems': todoItems});
   }
 
+  /// Get email settings for the current user
+  Future<EmailSettings> getEmailSettings() async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('User not authenticated');
+
+    final doc = await _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('settings')
+        .doc('email')
+        .get();
+
+    if (!doc.exists) {
+      throw Exception('Email settings not found');
+    }
+
+    return EmailSettings.fromDoc(doc);
+  }
+
+  /// Save email settings for the current user
+  Future<void> saveEmailSettings(EmailSettings settings) async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('User not authenticated');
+
+    await _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('settings')
+        .doc('email')
+        .set(settings.toMap());
+  }
+  
+  /// Delete email settings for the current user
+  Future<void> deleteEmailSettings() async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('User not authenticated');
+
+    await _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('settings')
+        .doc('email')
+        .delete();
+  }
+  
   // Test Firebase permissions
   Future<Map<String, bool>> testFirestorePermissions() async {
     final results = <String, bool>{};
@@ -768,5 +899,102 @@ class FirebaseService {
     }
     
     return results;
+  }  // This method is intentionally removed to resolve the duplicate definition error.
+  // The functionality is now handled by sendInvoicePdfWithCloudFunction method./// Send invoice PDF by email using HTTP API instead of Cloud Functions
+  Future<void> sendInvoicePdfWithCloudFunction({
+    required String invoiceId, 
+    String? recipientEmail,
+    String? logoUrl, 
+    String? templateId,
+    String? customSubject,
+    String? customBody
+  }) async {
+    try {
+      // Get required data
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('User not authenticated');
+      
+      final InvoiceModel invoice = await getInvoice(invoiceId);
+      final BusinessDetails businessDetails = await getBusinessDetails();
+      
+      // If no recipient email provided, get it from the client
+      if (recipientEmail == null || recipientEmail.isEmpty) {
+        final ClientModel client = await getClient(invoice.clientId);
+        recipientEmail = client.email;
+        if (recipientEmail.isEmpty) {
+          throw Exception('Client heeft geen e-mailadres');
+        }
+      }
+
+      // Generate PDF
+      final pdfBytes = await _pdfService.generateInvoicePdf(
+        invoice: invoice,
+        businessDetails: businessDetails,
+        logoUrl: logoUrl,
+        templateId: templateId,
+      );
+      
+      final pdfBase64 = base64Encode(pdfBytes);
+        // Set up email content with invoice details
+      final defaultEmailBody = '''
+Beste ${invoice.clientName},
+
+Hierbij ontvangt u factuur ${invoice.invoiceNumber}.
+
+Factuurgegevens:
+- Factuurnummer: ${invoice.invoiceNumber}
+- Factuurdatum: ${DateFormat('dd-MM-yyyy').format(invoice.invoiceDate)}
+- Vervaldatum: ${DateFormat('dd-MM-yyyy').format(invoice.dueDate)}
+- Bedrag: €${invoice.total.toStringAsFixed(2)}
+
+U kunt de factuur als PDF-bijlage in deze e-mail vinden.
+
+Betaling kunt u overmaken naar:
+${businessDetails.iban}
+o.v.v. factuurnummer ${invoice.invoiceNumber}
+
+Met vriendelijke groet,
+${businessDetails.companyName}
+''';
+
+      final emailSubject = customSubject ?? 'Factuur ${invoice.invoiceNumber} van ${businessDetails.companyName}';
+      final emailBody = customBody ?? defaultEmailBody;
+
+      // Use HTTP API to send email
+      final response = await http.post(
+        Uri.parse('$_baseUrl/send-invoice-email'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${await user.getIdToken()}'
+        },        body: jsonEncode({
+          'to': recipientEmail,
+          'subject': emailSubject,
+          'body': emailBody,
+          'fileName': 'factuur_${invoice.invoiceNumber}.pdf',
+          'pdfBase64': pdfBase64,
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        print('Email sent successfully');
+        
+        // Update invoice status to 'sent' and add sendDate
+        await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('invoices')
+            .doc(invoiceId)
+            .update({
+              'status': 'sent',
+              'sentAt': FieldValue.serverTimestamp(),
+            });
+      } else {
+        final errorData = jsonDecode(response.body);
+        throw Exception(errorData['error'] ?? 'Fout bij verzenden e-mail');
+      }
+    } catch (e) {
+      print('Error sending invoice PDF by email: $e');
+      throw Exception('Fout bij verzenden van factuur per e-mail: $e');
+    }
   }
 }

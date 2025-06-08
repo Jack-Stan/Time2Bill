@@ -8,6 +8,9 @@ import 'widgets/notification_settings_card.dart';
 import 'widgets/theme_settings_card.dart';
 import 'widgets/export_import_card.dart';
 import 'widgets/delete_account_card.dart';
+import 'widgets/email_settings_card.dart';
+import '../../models/email_settings.dart';
+import '../../services/background_tasks_service.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -23,13 +26,13 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _errorMessage;
   Map<String, dynamic> _userData = {};
   Map<String, dynamic> _userSettings = {};
+  EmailSettings? _emailSettings;
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
   }
-
   Future<void> _loadUserData() async {
     setState(() {
       _isLoading = true;
@@ -55,13 +58,27 @@ class _SettingsPageState extends State<SettingsPage> {
           .collection('settings')
           .doc('preferences')
           .get();
+          
+      // Fetch email settings
+      final emailSettingsDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('settings')
+          .doc('email')
+          .get();
 
       final userData = userDoc.exists ? userDoc.data() ?? {} : {};
       final userSettings = settingsDoc.exists ? settingsDoc.data() ?? {} : {};
+      
+      EmailSettings? emailSettings;
+      if (emailSettingsDoc.exists) {
+        emailSettings = EmailSettings.fromDoc(emailSettingsDoc);
+      }
 
       setState(() {
         _userData = Map<String, dynamic>.from(userData);
         _userSettings = Map<String, dynamic>.from(userSettings);
+        _emailSettings = emailSettings;
         _isLoading = false;
       });
     } catch (error) {
@@ -72,7 +89,6 @@ class _SettingsPageState extends State<SettingsPage> {
       print('Error fetching user data: $error');
     }
   }
-
   Future<void> _saveSettings(String cardType, Map<String, dynamic> settings) async {
     setState(() {
       _isLoading = true;
@@ -125,6 +141,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 'compactMode': settings['compactMode'],
               }, SetOptions(merge: true));
           break;
+        case 'email':
+          await userDocRef
+              .collection('settings')
+              .doc('email')
+              .set(settings, SetOptions(merge: true));
+          break;
       }
 
       // Refresh user data
@@ -141,6 +163,39 @@ class _SettingsPageState extends State<SettingsPage> {
         SnackBar(content: Text('Failed to save settings: ${error.toString()}')),
       );
       print('Error saving settings: $error');
+    }
+  }
+
+  // Manual trigger for invoice processing
+  Future<void> _runInvoiceProcessingNow() async {
+    setState(() {
+      _isLoading = true;
+    });
+    
+    try {
+      final backgroundTasksService = BackgroundTasksService();
+      await backgroundTasksService.runInvoiceProcessingNow();
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Invoice processing completed. Check logs for details.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (error) {
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error processing invoices: ${error.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      print('Error processing invoices: $error');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -271,6 +326,53 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
         ),
         const SizedBox(height: 24),
+          // Email Settings Card
+        EmailSettingsCard(
+          settings: _emailSettings,
+          onSave: (settings) => _saveSettings('email', settings),
+        ),
+        const SizedBox(height: 24),
+        
+        // Auto-invoice actions        if (_emailSettings?.autoSendEnabled == true)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.send, size: 24),
+                      SizedBox(width: 12),
+                      Text(
+                        'Automatic Invoicing',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Automatic invoice processing runs in the background. You can manually trigger the process to send invoices immediately.',
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: _runInvoiceProcessingNow,
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Run Invoice Processing Now'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).primaryColor,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        if (_emailSettings?.autoSendEnabled == true)
+          const SizedBox(height: 24),
         
         // Data Export/Import Card
         ExportImportCard(

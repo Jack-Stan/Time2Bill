@@ -10,6 +10,8 @@ import projectRoutes from './routes/projects.js';
 import clientRoutes from './routes/clients.js';
 import invoiceRoutes from './routes/invoices.js';
 import configRoutes from './routes/config.js';
+import testSmtpRoute from './routes/test-smtp-connection.js';
+import sendInvoiceEmailRoute from './routes/send-invoice-email.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -56,15 +58,14 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-app.use('/api/config', configRoutes);
-
-// Registration route doesn't need auth
+// API routes
 app.use('/api/users', userRoutes);
-
-// Protected routes with authentication middleware
-app.use('/api/projects', authMiddleware, projectRoutes);
-app.use('/api/clients', authMiddleware, clientRoutes);
-app.use('/api/invoices', authMiddleware, invoiceRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/clients', clientRoutes);
+app.use('/api/invoices', invoiceRoutes);
+app.use('/api/config', configRoutes);
+app.use('/api/test-smtp-connection', testSmtpRoute);
+app.use('/api/send-invoice-email', sendInvoiceEmailRoute);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

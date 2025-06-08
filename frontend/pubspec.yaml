@@ -77,3 +77,8 @@ flutter:
   assets:
     - lib/utils/images/LogoMetTitel.jpg
     - lib/utils/images/LogoZonderTitel.png
+
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf

@@ -28,6 +28,8 @@ class _RecurringInvoiceListState extends State<RecurringInvoiceList> {
   }
 
   Future<void> _fetchRecurringInvoices() async {
+    if (!mounted) return;
+    
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -63,11 +65,13 @@ class _RecurringInvoiceListState extends State<RecurringInvoiceList> {
         };
       }).toList();
 
+      if (!mounted) return;
       setState(() {
         _recurringInvoices = recurringInvoices;
         _isLoading = false;
       });
     } catch (error) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = 'Error loading recurring invoices: ${error.toString()}';
         _isLoading = false;

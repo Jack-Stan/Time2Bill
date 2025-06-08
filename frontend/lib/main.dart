@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/scheduler.dart';
 
+import 'services/background_tasks_service.dart';
 import 'screens/Landingscreen/landing_page_wrapper.dart';
 import 'screens/Featuresscreen/FeaturesPage.dart';
 import 'screens/HowItWorksscreen/HowItWorksPage.dart';
@@ -106,7 +107,12 @@ void main() async {
         } catch (e) {
           // Handle error silently or log to analytics
         }
-      }    } catch (e) {
+      }
+      
+      // Initialize background tasks service
+      BackgroundTasksService().initialize();
+      
+    } catch (e) {
       try {
         await FirebaseFirestore.instance.enableNetwork();
       } catch (netError) {
