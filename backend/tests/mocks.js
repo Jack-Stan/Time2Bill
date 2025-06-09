@@ -61,13 +61,17 @@ export const mockAuthMiddleware = jest.fn((req, res, next) => {
 });
 
 export const setupMocks = () => {
-  // Zet hier alle mocks op die je nodig hebt
+  // Mock firebase config
   jest.mock('../src/config/firebase.config.js', () => ({
-    initializeFirebaseAdmin: jest.fn(),
-    getFirebaseAdmin: jest.fn(() => mockFirebaseAdmin)
+    default: {
+      initializeFirebaseAdmin: jest.fn(),
+      getFirebaseAdmin: jest.fn(() => mockFirebaseAdmin)
+    }
   }));
   
+  // Mock auth middleware
   jest.mock('../src/middleware/auth.middleware.js', () => ({
+    default: mockAuthMiddleware,
     authMiddleware: mockAuthMiddleware
   }));
 };
