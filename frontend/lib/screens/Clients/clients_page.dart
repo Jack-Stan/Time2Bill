@@ -36,6 +36,8 @@ class _ClientsPageState extends State<ClientsPage> {
   }
 
   Future<void> _fetchClients() async {
+    if (!mounted) return;
+    
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -83,6 +85,8 @@ class _ClientsPageState extends State<ClientsPage> {
                      email.contains(lowerQuery);
             }).toList();
 
+      if (!mounted) return;
+
       setState(() {
         _clients = filteredClients;
         _isLoading = false;
@@ -97,6 +101,8 @@ class _ClientsPageState extends State<ClientsPage> {
         }
       });
     } catch (error) {
+      if (!mounted) return;
+      
       setState(() {
         _errorMessage = 'Error loading clients: ${error.toString()}';
         _isLoading = false;
@@ -166,16 +172,17 @@ class _ClientsPageState extends State<ClientsPage> {
           .doc(clientId)
           .delete();
       
+      if (!mounted) return;
+      
       // Reset selected client if it was the one deleted
-      if (_selectedClient != null && _selectedClient!['id'] == clientId) {
-        setState(() {
+      setState(() {
+        if (_selectedClient != null && _selectedClient!['id'] == clientId) {
           _selectedClient = null;
-        });
-      }
+        }
+      });
       
       _fetchClients();
-      
-      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Client deleted successfully')),
       );

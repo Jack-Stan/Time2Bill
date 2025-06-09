@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'dart:html' as html;
+import 'package:excel/excel.dart';
 import '../Dashboard/widgets/sidebar.dart';
 import 'widgets/time_breakdown_chart.dart';
 import 'widgets/revenue_chart.dart';
@@ -54,6 +56,7 @@ class _ReportsPageState extends State<ReportsPage> {
   }
 
   Future<void> _fetchReportData() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -256,6 +259,7 @@ class _ReportsPageState extends State<ReportsPage> {
       final activeClients = clientTimeData.length;
 
       // Update state with all the data
+      if (!mounted) return;
       setState(() {
         _projectTimeData = projectTimeData;
         _revenueData = revenueData;
@@ -269,6 +273,7 @@ class _ReportsPageState extends State<ReportsPage> {
         _isLoading = false;
       });
     } catch (error) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = 'Error loading report data: ${error.toString()}';
         _isLoading = false;
@@ -358,18 +363,207 @@ class _ReportsPageState extends State<ReportsPage> {
   }
 
   Widget _buildHeader() {
-    return const Row(
+    return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
+        const Text(
           'Reports & Analytics',
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
           ),
         ),
+        ElevatedButton.icon(
+          onPressed: _exportToExcel,
+          icon: const Icon(Icons.download),
+          label: const Text('Export to Excel'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: primaryColor,
+            foregroundColor: Colors.white,
+          ),
+        ),
       ],
     );
+  }
+
+  Future<void> _exportToExcel() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      // Format dates for filename
+      final startStr = DateFormat('yyyy-MM-dd').format(_startDate);
+      final endStr = DateFormat('yyyy-MM-dd').format(_endDate);
+      final fileName = 'financial_report_${startStr}_to_${endStr}.xlsx';
+
+      // Prepare data for Excel
+      final revenueByClient = <String, double>{};
+      final hoursByClient = <String, double>{};
+      final unpaidInvoices = <Map<String, dynamic>>[];
+      double totalUnpaidAmount = 0;
+
+      // Get all invoices for the period
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('User not authenticated');
+
+      final invoicesSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('invoices')
+          .where('invoiceDate', isGreaterThanOrEqualTo: Timestamp.fromDate(_startDate))
+          .where('invoiceDate', isLessThanOrEqualTo: Timestamp.fromDate(_endDate))
+          .get();
+
+      for (var doc in invoicesSnapshot.docs) {
+        final data = doc.data();
+        final clientName = data['clientName'] ?? 'Unknown Client';
+        final amount = (data['total'] as num?)?.toDouble() ?? 0;
+        final status = data['status'] as String? ?? 'unpaid';
+
+        revenueByClient[clientName] = (revenueByClient[clientName] ?? 0) + amount;
+
+        if (status.toLowerCase() != 'paid') {
+          unpaidInvoices.add({
+            'invoiceNumber': data['invoiceNumber'] ?? 'No number',
+            'clientName': clientName,
+            'amount': amount,
+            'dueDate': data['dueDate'] != null 
+              ? (data['dueDate'] as Timestamp).toDate()
+              : null,
+            'status': status,
+          });
+          totalUnpaidAmount += amount;
+        }
+      }
+
+      // Create Excel workbook
+      final xlsx = Excel.createExcel();
+
+      // Summary sheet
+      final summarySheet = xlsx['Summary'];
+      summarySheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0))
+        ..value = 'Financial Report'
+        ..cellStyle = CellStyle(
+          bold: true,
+          fontSize: 14,
+        );
+
+      summarySheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 2))
+        ..value = 'Period';
+      summarySheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 2))
+        ..value = '$startStr to $endStr';
+
+      summarySheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 4))
+        ..value = 'Total Revenue'
+        ..cellStyle = CellStyle(bold: true);
+      summarySheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 4))
+        ..value = _totalRevenue;
+
+      summarySheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 5))
+        ..value = 'Total Hours'
+        ..cellStyle = CellStyle(bold: true);
+      summarySheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 5))
+        ..value = _totalHoursBilled;
+
+      summarySheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 6))
+        ..value = 'Average Rate'
+        ..cellStyle = CellStyle(bold: true);
+      summarySheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 6))
+        ..value = _averageHourlyRate;
+
+      summarySheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 7))
+        ..value = 'Total Unpaid'
+        ..cellStyle = CellStyle(bold: true);
+      summarySheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 7))
+        ..value = totalUnpaidAmount;
+
+      // Revenue by client sheet
+      final clientSheet = xlsx['Revenue by Client'];
+      clientSheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0))
+        ..value = 'Client'
+        ..cellStyle = CellStyle(bold: true);
+      clientSheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 0))
+        ..value = 'Revenue'
+        ..cellStyle = CellStyle(bold: true);
+      clientSheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 0))
+        ..value = 'Hours'
+        ..cellStyle = CellStyle(bold: true);
+
+      var row = 1;
+      for (var entry in _clientRevenueData) {
+        clientSheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row))
+          .value = entry['name'];
+        clientSheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row))
+          .value = entry['revenue'];
+        clientSheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: row))
+          .value = entry['hours'];
+        row++;
+      }
+
+      // Unpaid invoices sheet
+      final unpaidSheet = xlsx['Unpaid Invoices'];
+      unpaidSheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0))
+        ..value = 'Invoice Number'
+        ..cellStyle = CellStyle(bold: true);
+      unpaidSheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 0))
+        ..value = 'Client'
+        ..cellStyle = CellStyle(bold: true);
+      unpaidSheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 0))
+        ..value = 'Amount'
+        ..cellStyle = CellStyle(bold: true);
+      unpaidSheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: 0))
+        ..value = 'Due Date'
+        ..cellStyle = CellStyle(bold: true);
+      unpaidSheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: 0))
+        ..value = 'Status'
+        ..cellStyle = CellStyle(bold: true);
+
+      row = 1;
+      for (var invoice in unpaidInvoices) {
+        unpaidSheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row))
+          .value = invoice['invoiceNumber'];
+        unpaidSheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row))
+          .value = invoice['clientName'];
+        unpaidSheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: row))
+          .value = invoice['amount'];
+        unpaidSheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: row))
+          .value = invoice['dueDate'] != null 
+            ? DateFormat('yyyy-MM-dd').format(invoice['dueDate'])
+            : 'No due date';
+        unpaidSheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: row))
+          .value = invoice['status'];
+        row++;
+      }
+
+      // Convert to bytes and trigger download
+      final bytes = xlsx.encode();
+      if (bytes != null) {
+        final blob = html.Blob([bytes]);
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        final anchor = html.AnchorElement(href: url)
+          ..setAttribute('download', fileName)
+          ..click();
+        html.Url.revokeObjectUrl(url);
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Report exported successfully')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error exporting report: $e')),
+      );
+      print('Error exporting to Excel: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   Widget _buildSummaryCards() {
@@ -377,146 +571,195 @@ class _ReportsPageState extends State<ReportsPage> {
     
     return Row(
       children: [
+        // Total Revenue Card
         Expanded(
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.attach_money, color: Colors.green[700], size: 20),
-                      const SizedBox(width: 8),
-                      const Text('Revenue', style: TextStyle(fontSize: 16)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    moneyFormat.format(_totalRevenue),
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green[700],
+          child: Tooltip(
+            message: 'Total revenue for the selected period',
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.euro, color: primaryColor),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Total Revenue',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    Text(
+                      moneyFormat.format(_totalRevenue),
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
         const SizedBox(width: 16),
+        
+        // Hours Billed Card
         Expanded(
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.timer, color: Colors.blue[700], size: 20),
-                      const SizedBox(width: 8),
-                      const Text('Hours Billed', style: TextStyle(fontSize: 16)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _totalHoursBilled.toStringAsFixed(1) + ' h',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue[700],
+          child: Tooltip(
+            message: 'Total billable hours tracked in this period',
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.timer, color: primaryColor),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Hours Billed',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    Text(
+                      '${_totalHoursBilled.toStringAsFixed(1)} hrs',
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
         const SizedBox(width: 16),
+        
+        // Average Rate Card
         Expanded(
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.euro, color: Colors.purple[700], size: 20),
-                      const SizedBox(width: 8),
-                      const Text('Average Rate', style: TextStyle(fontSize: 16)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    moneyFormat.format(_averageHourlyRate) + '/h',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.purple[700],
+          child: Tooltip(
+            message: 'Average hourly rate calculated from revenue and hours',
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.trending_up, color: primaryColor),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Average Rate',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    Text(
+                      '${moneyFormat.format(_averageHourlyRate)}/hr',
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
         const SizedBox(width: 16),
+        
+        // Active Projects Card  
         Expanded(
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.people, color: Colors.orange[700], size: 20),
-                      const SizedBox(width: 8),
-                      const Text('Active Clients', style: TextStyle(fontSize: 16)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _activeClients.toString(),
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.orange[700],
+          child: Tooltip(
+            message: 'Number of projects with tracked time in this period',
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.folder, color: primaryColor),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Active Projects',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    Text(
+                      _activeProjects.toString(),
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
         const SizedBox(width: 16),
+        
+        // Active Clients Card
         Expanded(
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.folder, color: Colors.teal[700], size: 20),
-                      const SizedBox(width: 8),
-                      const Text('Active Projects', style: TextStyle(fontSize: 16)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _activeProjects.toString(),
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.teal[700],
+          child: Tooltip(
+            message: 'Number of clients with invoices or time entries in this period',
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.people, color: primaryColor),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Active Clients',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    Text(
+                      _activeClients.toString(),
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
