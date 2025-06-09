@@ -6,11 +6,13 @@ import 'overflow_safe_widget.dart';
 class FirebaseConnectivityMonitor extends StatefulWidget {
   final Widget child;
   final Duration checkInterval;
+  final FirebaseFirestore? firestore;
 
   const FirebaseConnectivityMonitor({
     super.key,
     required this.child,
     this.checkInterval = const Duration(minutes: 5),
+    this.firestore,
   });
 
   @override
@@ -54,13 +56,14 @@ class _FirebaseConnectivityMonitorState extends State<FirebaseConnectivityMonito
       _checkConnectivity();
     }
   }
-
   Future<void> _checkConnectivity() async {
     if (_isChecking) return;
     
     _isChecking = true;
     try {
-      await FirebaseFirestore.instance.collection('system').doc('status').get()
+      // Use the injected firestore if provided, otherwise use the default instance
+      final firestoreInstance = widget.firestore ?? FirebaseFirestore.instance;
+      await firestoreInstance.collection('system').doc('status').get()
           .timeout(const Duration(seconds: 10));
       
       if (!mounted) return;

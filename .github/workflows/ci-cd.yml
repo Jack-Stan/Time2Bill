@@ -17,14 +17,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      
-      - name: Setup Node.js
+       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
           cache: 'npm'
           cache-dependency-path: ./backend/package-lock.json
-      
+
       - name: Install dependencies
         run: npm ci
       
@@ -53,7 +52,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.16.0'
+          flutter-version: '3.32.2'
           channel: 'stable'
       
       - name: Install dependencies
@@ -62,9 +61,18 @@ jobs:
       - name: Analyze project source
         run: flutter analyze
       
+      - name: Generate mocks
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+      
       - name: Run tests
-        run: flutter test
-        continue-on-error: true  # Allow tests to fail but continue the workflow
+        run: flutter test --coverage --platform=chrome
+        # Running on Chrome platform to support web-specific code
+      
+      - name: Upload test coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: ./frontend/coverage
   
   build-backend:
     name: Build Backend
@@ -83,8 +91,7 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: ./backend/package-lock.json
+          cache: 'npm'          cache-dependency-path: ./backend/package-lock.json
       
       - name: Install dependencies
         run: npm ci
@@ -118,7 +125,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.16.0'
+          flutter-version: '3.32.2'
           channel: 'stable'
       
       - name: Install dependencies

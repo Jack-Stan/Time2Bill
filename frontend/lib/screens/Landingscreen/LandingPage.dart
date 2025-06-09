@@ -75,34 +75,34 @@ class _LandingPageWidgetState extends State<LandingPageWidget> with TickerProvid
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = GoogleFonts.interTextTheme(Theme.of(context).textTheme);
-
-    if (widget.useSimpleLayout) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          NavBar(
-            primaryColor: primaryColor,
-            onGetStarted: () {
-              Navigator.pushNamed(context, '/register');
-            },
-          ),
-          _buildSimpleHeroSection(textTheme),
-          _buildSimpleFeaturesSection(textTheme),
-          _buildSimpleAppPreviewSection(textTheme),
-          _buildFooterSection(textTheme),
-        ],
+    final textTheme = GoogleFonts.interTextTheme(Theme.of(context).textTheme);    if (widget.useSimpleLayout) {
+      return SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            NavBar(
+              primaryColor: primaryColor,
+              onGetStarted: () {
+                Navigator.pushNamed(context, '/register');
+              },
+            ),
+            _buildSimpleHeroSection(textTheme),
+            _buildSimpleFeaturesSection(textTheme),
+            _buildSimpleAppPreviewSection(textTheme),
+            _buildFooterSection(textTheme),
+          ],
+        ),
       );
     }
 
     return Scaffold(
-      key: scaffoldKey,
-      body: Container(
+      key: scaffoldKey,      body: Container(
         width: double.infinity,
         height: double.infinity,
         child: Stack(
           clipBehavior: Clip.hardEdge,
+          fit: StackFit.expand,
           children: [
             if (!widget.disableAnimations)
               AnimatedGradientBox(controller: _backgroundAnimationController),
@@ -152,22 +152,28 @@ class _LandingPageWidgetState extends State<LandingPageWidget> with TickerProvid
                 physics: kIsWeb
                     ? const NeverScrollableScrollPhysics()
                     : const AlwaysScrollableScrollPhysics(),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    NavBar(
-                      primaryColor: primaryColor,
-                      onGetStarted: () {
-                        Navigator.pushNamed(context, '/register');
-                      },
-                    ),
-                    _buildHeroSection(textTheme),
-                    _buildFeaturesSection(textTheme),
-                    _buildAppPreviewSection(textTheme),
-                    _buildTestimonialsSection(textTheme),
-                    _buildCtaSection(textTheme),
-                    _buildFooterSection(textTheme),
-                  ],
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minWidth: MediaQuery.of(context).size.width,
+                    minHeight: MediaQuery.of(context).size.height,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      NavBar(
+                        primaryColor: primaryColor,
+                        onGetStarted: () {
+                          Navigator.pushNamed(context, '/register');
+                        },
+                      ),
+                      _buildHeroSection(textTheme),
+                      _buildFeaturesSection(textTheme),
+                      _buildAppPreviewSection(textTheme),
+                      _buildTestimonialsSection(textTheme),
+                      _buildCtaSection(textTheme),
+                      _buildFooterSection(textTheme),
+                    ],
+                  ),
                 ),
               ),
             ),

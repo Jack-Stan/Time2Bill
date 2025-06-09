@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'dart:html' as html;
+import 'package:frontend/utils/web_helper.dart';
 import 'package:excel/excel.dart';
 import '../Dashboard/widgets/sidebar.dart';
 import 'widgets/time_breakdown_chart.dart';
@@ -390,16 +390,14 @@ class _ReportsPageState extends State<ReportsPage> {
     try {
       setState(() {
         _isLoading = true;
-      });
-
-      // Format dates for filename
+      });      // Format dates for filename
       final startStr = DateFormat('yyyy-MM-dd').format(_startDate);
       final endStr = DateFormat('yyyy-MM-dd').format(_endDate);
       final fileName = 'financial_report_${startStr}_to_${endStr}.xlsx';
 
       // Prepare data for Excel
       final revenueByClient = <String, double>{};
-      final hoursByClient = <String, double>{};
+      // hoursByClient can be added later if needed
       final unpaidInvoices = <Map<String, dynamic>>[];
       double totalUnpaidAmount = 0;
 
@@ -534,17 +532,10 @@ class _ReportsPageState extends State<ReportsPage> {
         unpaidSheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: row))
           .value = invoice['status'];
         row++;
-      }
-
-      // Convert to bytes and trigger download
+      }      // Convert to bytes and trigger download
       final bytes = xlsx.encode();
       if (bytes != null) {
-        final blob = html.Blob([bytes]);
-        final url = html.Url.createObjectUrlFromBlob(blob);
-        final anchor = html.AnchorElement(href: url)
-          ..setAttribute('download', fileName)
-          ..click();
-        html.Url.revokeObjectUrl(url);
+        WebHelper.downloadFile(bytes, fileName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       }
 
       if (!mounted) return;

@@ -109,7 +109,7 @@ class RevenueChart extends StatelessWidget {
             dotData: FlDotData(show: true),
             belowBarData: BarAreaData(
               show: true,
-              color: Colors.green.withOpacity(0.1),
+              color: Colors.green.withValues(alpha: 26), // 0.1 opacity = 26 in 0-255 range
             ),
           ),
           // Hours Line (scaled)
@@ -126,7 +126,7 @@ class RevenueChart extends StatelessWidget {
             dotData: FlDotData(show: true),
             belowBarData: BarAreaData(
               show: true,
-              color: Colors.blue.withOpacity(0.1),
+              color: Colors.blue.withValues(alpha: 26), // 0.1 opacity = 26 in 0-255 range
             ),
           ),
         ],
