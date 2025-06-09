@@ -6,7 +6,13 @@ const router = express.Router();
 
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { smtpHost, smtpPort, smtpSecure, smtpEmail, smtpPassword } = req.body;
+    const { 
+      smtpHost, 
+      smtpPort, 
+      smtpSecure, 
+      smtpEmail, 
+      smtpPassword
+    } = req.body;
 
     // Create test SMTP transporter
     const transporter = nodemailer.createTransport({
@@ -18,8 +24,8 @@ router.post('/', authMiddleware, async (req, res) => {
         pass: smtpPassword,
       },
       tls: {
-        // Do not fail on invalid certs
-        rejectUnauthorized: false
+        rejectUnauthorized: true,
+        minVersion: 'TLSv1.2'
       }
     });
 

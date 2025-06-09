@@ -32,7 +32,7 @@ router.post('/', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Incomplete email settings' });
     }
 
-    // Configure mail transporter with ProtonMail SMTP
+    // Configure mail transporter
     const transportConfig = {
       host: emailSettings.smtpHost,
       port: emailSettings.smtpPort,
@@ -41,13 +41,13 @@ router.post('/', authMiddleware, async (req, res) => {
         user: emailSettings.smtpEmail,
         pass: emailSettings.smtpPassword
       },
-      // Proper TLS configuration for ProtonMail
       tls: {
         rejectUnauthorized: true, // Verify TLS certificates
         minVersion: 'TLSv1.2'
       }
     };
 
+    // Create nodemailer transporter
     const transporter = nodemailer.createTransport(transportConfig);
 
     // Verify connection configuration
@@ -55,14 +55,11 @@ router.post('/', authMiddleware, async (req, res) => {
       await transporter.verify();
     } catch (verifyError) {
       console.error('SMTP Connection verification failed:', verifyError);
-      return res.status(500).json({ 
-        error: 'Failed to connect to email server',
-        details: verifyError.message
-      });
+      return res.status(500).json({ error: 'Failed to connect to email server' });
     }
 
-    // Handle PGP encryption if enabled
-    let emailConfig = {
+    // Configure email
+    const emailConfig = {
       from: `"${emailSettings.smtpEmail}" <${emailSettings.smtpEmail}>`,
       to,
       subject,
@@ -72,23 +69,9 @@ router.post('/', authMiddleware, async (req, res) => {
           filename: fileName,
           content: Buffer.from(pdfBase64, 'base64'),
           contentType: 'application/pdf',
-        },
-      ],
+        }
+      ]
     };
-
-    // Add PGP signing if enabled
-    if (emailSettings.signExternalMessages) {
-      emailConfig.pgp = {
-        sign: true,
-        scheme: emailSettings.pgpScheme || 'PGP/MIME'
-      };
-      if (emailSettings.attachPublicKey) {
-        emailConfig.attachments.push({
-          filename: 'public-key.asc',
-          path: `${process.env.PGP_PUBLIC_KEY_PATH}`
-        });
-      }
-    }
 
     await transporter.sendMail(emailConfig);
 

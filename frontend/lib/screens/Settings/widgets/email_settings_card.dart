@@ -24,19 +24,14 @@ class _EmailSettingsCardState extends State<EmailSettingsCard> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   String? _errorMessage;
-
-  final _hostController = TextEditingController();
-  final _portController = TextEditingController();
+  final _hostController = TextEditingController(text: 'smtp.gmail.com');
+  final _portController = TextEditingController(text: '587');
   final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final _passwordController = TextEditingController(text: 'aecx rqvr egvr swhk');
   final _subjectTemplateController = TextEditingController();
   final _bodyTemplateController = TextEditingController();
-  bool _useSSL = false;
+  bool _useSSL = true;
   bool _autoSendEnabled = false;
-  bool _signExternalMessages = false;
-  bool _attachPublicKey = false;
-  String _pgpScheme = 'PGP/MIME';
-  String? _pgpFingerprint;
 
   @override
   void initState() {
@@ -50,10 +45,6 @@ class _EmailSettingsCardState extends State<EmailSettingsCard> {
       _autoSendEnabled = widget.settings!.autoSendEnabled;
       _subjectTemplateController.text = widget.settings!.defaultSubjectTemplate;
       _bodyTemplateController.text = widget.settings!.defaultBodyTemplate;
-      _signExternalMessages = widget.settings!.signExternalMessages ?? false;
-      _attachPublicKey = widget.settings!.attachPublicKey ?? false;
-      _pgpScheme = widget.settings!.pgpScheme ?? 'PGP/MIME';
-      _pgpFingerprint = widget.settings!.pgpFingerprint;
     }
   }
 
@@ -71,6 +62,11 @@ class _EmailSettingsCardState extends State<EmailSettingsCard> {
   void _handleSubmit() {
     if (_formKey.currentState?.validate() != true) return;
 
+    // Clear any previous error message
+    setState(() {
+      _errorMessage = null;
+    });
+
     final settings = {
       'smtpHost': _hostController.text,
       'smtpPort': int.parse(_portController.text),
@@ -80,10 +76,6 @@ class _EmailSettingsCardState extends State<EmailSettingsCard> {
       'autoSendEnabled': _autoSendEnabled,
       'defaultSubjectTemplate': _subjectTemplateController.text,
       'defaultBodyTemplate': _bodyTemplateController.text,
-      'signExternalMessages': _signExternalMessages,
-      'attachPublicKey': _attachPublicKey,
-      'pgpScheme': _pgpScheme,
-      'pgpFingerprint': _pgpFingerprint,
     };
 
     widget.onSave(settings);
@@ -218,18 +210,19 @@ class _EmailSettingsCardState extends State<EmailSettingsCard> {
                         
                         // Gmail Sectie
                         Text(
-                          'Optie 1: Gmail Configuratie',
+                          'Gmail Configuratie',
                           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         const SizedBox(height: 12),
                         const Text(
+                          'Gmail instellen:\n'
                           '1. Open je Google Account instellingen\n'
                           '2. Ga naar Beveiliging → 2-stapsverificatie\n'
                           '3. Scroll naar "App-wachtwoorden"\n'
                           '4. Maak een nieuw app-wachtwoord aan voor "Mail"\n'
-                          '5. Gebruik deze instellingen in Time2Bill:\n'
+                          '5. Gebruik deze instellingen:\n'
                           '   • SMTP Server: smtp.gmail.com\n'
                           '   • Poort: 587\n'
                           '   • E-mail: je Gmail adres\n'
@@ -273,17 +266,18 @@ class _EmailSettingsCardState extends State<EmailSettingsCard> {
 
                         // Outlook/Microsoft 365 Sectie
                         Text(
-                          'Optie 2: Outlook/Microsoft 365',
+                          'Outlook/Microsoft 365',
                           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         const SizedBox(height: 12),
                         const Text(
+                          'Microsoft 365 instellen:\n'
                           '1. Log in op je Microsoft account\n'
                           '2. Ga naar Beveiliging → Geavanceerde beveiliging\n'
                           '3. Maak een app-wachtwoord aan\n'
-                          '4. Gebruik deze instellingen in Time2Bill:\n'
+                          '4. Gebruik deze instellingen:\n'
                           '   • SMTP Server: smtp.office365.com\n'
                           '   • Poort: 587\n'
                           '   • E-mail: je Outlook/Microsoft 365 adres\n'

@@ -47,7 +47,23 @@ Met vriendelijke groet,
     this.pgpFingerprint,
   });
 
+  static bool isValidPgpFingerprint(String? fingerprint) {
+    if (fingerprint == null) return false;
+    return RegExp(r'^[A-Fa-f0-9]{40}$').hasMatch(fingerprint);
+  }
+
+  bool validate() {
+    if (signExternalMessages && !isValidPgpFingerprint(pgpFingerprint)) {
+      throw Exception('Invalid PGP fingerprint format');
+    }
+    if (signExternalMessages && !['PGP/MIME', 'PGP/Inline'].contains(pgpScheme)) {
+      throw Exception('Invalid PGP scheme');
+    }
+    return true;
+  }
+
   Map<String, dynamic> toMap() {
+    validate();
     return {
       'smtpHost': smtpHost,
       'smtpPort': smtpPort,
@@ -60,7 +76,7 @@ Met vriendelijke groet,
       'signExternalMessages': signExternalMessages,
       'attachPublicKey': attachPublicKey,
       'pgpScheme': pgpScheme,
-      'pgpFingerprint': pgpFingerprint,
+      'pgpFingerprint': signExternalMessages ? pgpFingerprint : null,
     };
   }
 
