@@ -9,6 +9,16 @@ logs/
 *.log
 
 # Firebase service account key
+*.json
+!firebase.json
+!firestore*.json
+!package*.json
+!manifest.json
+!.github/workflows/*.json
+
+# Environment variables
+.env
+*.env
 backend/config/serviceAccountKey.json
 
 # Flutter/Dart

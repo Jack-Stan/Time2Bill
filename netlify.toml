@@ -1,0 +1,13 @@
+[build]
+  publish = "frontend/build/web"
+  functions = "backend/src"
+  command = "echo 'Using pre-built files'"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+[dev]
+  framework = "flutter"
+  functionsPort = 8888
