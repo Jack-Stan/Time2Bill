@@ -61,6 +61,7 @@ Voor ontwikkelaars:
 1. Clone deze repository
 2. Voer de installatiestappen uit
 3. Maak een `.env` bestand in de frontend map voor lokale configuratie
+   - Backend: kopieer `backend/.env.example` naar `backend/.env` en vul de Firebase service-account waarden in (Firebase console > Project settings > Service accounts). `backend/.env` staat in `.gitignore` en mag nooit gecommit worden.
 4. Start ontwikkelen!
 
 ## 📄 Licentie

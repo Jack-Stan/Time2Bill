@@ -10,7 +10,7 @@ export default {
     '^../src/(.*)$': '<rootDir>/src/$1',
     '^./src/(.*)$': '<rootDir>/src/$1',
   },
-  setupFiles: ['<rootDir>/tests/jest-mocks.js', '<rootDir>/tests/setup-server.js'],  setupFilesAfterEnv: ['<rootDir>/tests/mocks.js'],  
+  setupFiles: ['<rootDir>/tests/test-env.js', '<rootDir>/tests/jest-mocks.js', '<rootDir>/tests/setup-server.js'],  setupFilesAfterEnv: ['<rootDir>/tests/mocks.js'],  
   transformIgnorePatterns: [],
   collectCoverageFrom: [
     'src/**/*.js',

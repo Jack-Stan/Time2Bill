@@ -16,9 +16,11 @@ logs/
 !manifest.json
 !.github/workflows/*.json
 
-# Environment variables
+# Environment variables (real values never committed; see backend/.env.example)
 .env
 *.env
+backend/.env
+!.env.example
 backend/config/serviceAccountKey.json
 
 # Flutter/Dart
